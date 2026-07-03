@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
-import { Category, Product } from '@/types/database'
+import { Category, Ingredient, Product, ProductIngredient } from '@/types/database'
 import { formatCurrency } from '@/lib/utils'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -15,7 +15,7 @@ import { Separator } from '@/components/ui/separator'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { ChevronDown, ChevronUp, ImagePlus, X, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, ImagePlus, X, Loader2, Plus, Trash2, Package } from 'lucide-react'
 
 // ── Listas fiscais ──────────────────────────────────────────────────────────
 
@@ -88,6 +88,7 @@ interface FormState {
   sort_order: number
   active: boolean
   image_url: string | null
+  has_ingredients: boolean
 }
 
 const defaultForm: FormState = {
@@ -105,6 +106,13 @@ const defaultForm: FormState = {
   sort_order: 0,
   active: true,
   image_url: null,
+  has_ingredients: false,
+}
+
+interface LocalIngredient {
+  ingredient_id: string
+  quantity: number
+  ingredient: Ingredient
 }
 
 interface Props {
@@ -115,7 +123,7 @@ interface Props {
   onSave: () => void
 }
 
-// ── Componente ──────────────────────────────────────────────────────────────
+// ── Upload helper ────────────────────────────────────────────────────────────
 
 async function uploadProductImage(file: File, productId?: string): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
@@ -126,15 +134,25 @@ async function uploadProductImage(file: File, productId?: string): Promise<strin
   return data.publicUrl
 }
 
+// ── Componente ──────────────────────────────────────────────────────────────
+
 export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }: Props) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState<FormState>(defaultForm)
   const [error, setError] = useState<string | null>(null)
   const [fiscalOpen, setFiscalOpen] = useState(false)
+
+  // Imagem
   const [imgPreview, setImgPreview] = useState<string | null>(null)
   const [imgUploading, setImgUploading] = useState(false)
   const imgInputRef = useRef<HTMLInputElement>(null)
 
+  // Insumos locais (antes de salvar)
+  const [localIngredients, setLocalIngredients] = useState<LocalIngredient[]>([])
+  const [addIngId, setAddIngId] = useState('')
+  const [addQty, setAddQty] = useState('1')
+
+  // Carrega categorias
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', 'active'],
     enabled: open,
@@ -146,11 +164,26 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
     },
   })
 
+  // Carrega todos os insumos disponíveis
+  const { data: allIngredients = [] } = useQuery({
+    queryKey: ['ingredients'],
+    enabled: open,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('ingredients').select('*').order('name')
+      if (error) throw error
+      return data as Ingredient[]
+    },
+  })
+
+  // Inicializa form ao abrir
   useEffect(() => {
     if (open) {
       setError(null)
       setFiscalOpen(false)
       setImgUploading(false)
+      setAddIngId('')
+      setAddQty('1')
+
       if (product) {
         setForm({
           name: product.name,
@@ -167,14 +200,50 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
           sort_order: product.sort_order,
           active: product.active,
           image_url: product.image_url ?? null,
+          has_ingredients: product.has_ingredients ?? false,
         })
         setImgPreview(product.image_url ?? null)
+
+        // Carrega insumos existentes do produto
+        if (product.has_ingredients) {
+          supabase
+            .from('product_ingredients')
+            .select('*, ingredients(*)')
+            .eq('product_id', product.id)
+            .then(({ data }) => {
+              if (data) setLocalIngredients(
+                (data as ProductIngredient[]).map((pi) => ({
+                  ingredient_id: pi.ingredient_id,
+                  quantity: pi.quantity,
+                  ingredient: pi.ingredients,
+                }))
+              )
+            })
+        } else {
+          setLocalIngredients([])
+        }
       } else {
         setForm(defaultForm)
         setImgPreview(null)
+        setLocalIngredients([])
       }
     }
   }, [open, product])
+
+  // Custo total calculado pelos insumos
+  const ingredientsTotalCost = localIngredients.reduce(
+    (acc, li) => acc + li.quantity * li.ingredient.cost_per_unit,
+    0
+  )
+
+  // Quando has_ingredients muda, atualiza cost_price automaticamente
+  useEffect(() => {
+    if (form.has_ingredients && localIngredients.length > 0) {
+      setForm((f) => ({ ...f, cost_price: ingredientsTotalCost.toFixed(4) }))
+    }
+  }, [ingredientsTotalCost, form.has_ingredients])
+
+  // ── Upload de imagem ──────────────────────────────────────────────────────
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -186,7 +255,7 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
       setForm((f) => ({ ...f, image_url: url }))
       setImgPreview(url)
     } catch {
-      setError('Erro ao fazer upload da imagem. Verifique se o bucket "product-images" está criado no Supabase.')
+      setError('Erro ao fazer upload da imagem.')
     } finally {
       setImgUploading(false)
       if (imgInputRef.current) imgInputRef.current.value = ''
@@ -198,14 +267,47 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
     setImgPreview(null)
   }
 
+  // ── Insumos locais ────────────────────────────────────────────────────────
+
+  const availableIngredients = allIngredients.filter(
+    (ing) => !localIngredients.some((li) => li.ingredient_id === ing.id)
+  )
+
+  function handleAddIngredient() {
+    if (!addIngId || !addQty || Number(addQty) <= 0) return
+    const ingredient = allIngredients.find((i) => i.id === addIngId)
+    if (!ingredient) return
+    setLocalIngredients((prev) => [...prev, { ingredient_id: addIngId, quantity: Number(addQty), ingredient }])
+    setAddIngId('')
+    setAddQty('1')
+  }
+
+  function handleUpdateQty(ingredient_id: string, qty: string) {
+    const n = Number(qty)
+    if (n <= 0) return
+    setLocalIngredients((prev) =>
+      prev.map((li) => li.ingredient_id === ingredient_id ? { ...li, quantity: n } : li)
+    )
+  }
+
+  function handleRemoveIngredient(ingredient_id: string) {
+    setLocalIngredients((prev) => prev.filter((li) => li.ingredient_id !== ingredient_id))
+  }
+
+  // ── Salvar ────────────────────────────────────────────────────────────────
+
   const mutation = useMutation({
     mutationFn: async () => {
+      const costPrice = form.has_ingredients
+        ? ingredientsTotalCost
+        : form.cost_price ? Number(form.cost_price) : 0
+
       const payload = {
         name: form.name.trim(),
         category_id: form.category_id || null,
         description: form.description.trim() || null,
         price: Number(form.price),
-        cost_price: form.cost_price ? Number(form.cost_price) : 0,
+        cost_price: costPrice,
         stock_quantity: Number(form.stock_quantity) || 0,
         ncm: form.ncm || null,
         cest: form.cest || null,
@@ -215,12 +317,30 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
         sort_order: form.sort_order,
         active: form.active,
         image_url: form.image_url,
+        has_ingredients: form.has_ingredients,
       }
+
+      let productId: string
+
       if (product) {
         const { error } = await supabase.from('products').update(payload).eq('id', product.id)
         if (error) throw error
+        productId = product.id
       } else {
-        const { error } = await supabase.from('products').insert(payload)
+        const { data, error } = await supabase.from('products').insert(payload).select('id').single()
+        if (error) throw error
+        productId = data.id
+      }
+
+      // Sincroniza product_ingredients
+      await supabase.from('product_ingredients').delete().eq('product_id', productId)
+      if (form.has_ingredients && localIngredients.length > 0) {
+        const rows = localIngredients.map((li) => ({
+          product_id: productId,
+          ingredient_id: li.ingredient_id,
+          quantity: li.quantity,
+        }))
+        const { error } = await supabase.from('product_ingredients').insert(rows)
         if (error) throw error
       }
     },
@@ -236,12 +356,16 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
     e.preventDefault()
     if (!form.name.trim()) { setError('O nome é obrigatório.'); return }
     if (!form.price || Number(form.price) <= 0) { setError('Informe um preço de venda válido.'); return }
+    if (form.has_ingredients && localIngredients.length === 0) {
+      setError('Adicione ao menos um insumo ou desmarque a opção de composição.')
+      return
+    }
     mutation.mutate()
   }
 
   const price = Number(form.price)
-  const costPrice = Number(form.cost_price) || 0
-  const fichaCustoEfetivo = fichaCusto !== undefined ? fichaCusto : costPrice
+  const costForMargem = form.has_ingredients ? ingredientsTotalCost : (Number(form.cost_price) || 0)
+  const fichaCustoEfetivo = fichaCusto !== undefined ? fichaCusto : costForMargem
   const margem = fichaCustoEfetivo > 0 && price > 0
     ? ((price - fichaCustoEfetivo) / price) * 100
     : null
@@ -272,22 +396,11 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
               <div className="relative w-full h-40 rounded-lg overflow-hidden border bg-muted group">
                 <img src={imgPreview} alt="Prévia" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => imgInputRef.current?.click()}
-                    disabled={imgUploading}
-                  >
+                  <Button type="button" size="sm" variant="secondary" onClick={() => imgInputRef.current?.click()} disabled={imgUploading}>
                     {imgUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
                     Alterar
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="destructive"
-                    onClick={handleRemoveImage}
-                  >
+                  <Button type="button" size="sm" variant="destructive" onClick={handleRemoveImage}>
                     <X className="w-3.5 h-3.5" />
                     Remover
                   </Button>
@@ -300,9 +413,7 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
                 disabled={imgUploading}
                 className="w-full h-32 rounded-lg border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
               >
-                {imgUploading
-                  ? <Loader2 className="w-6 h-6 animate-spin" />
-                  : <ImagePlus className="w-6 h-6" />}
+                {imgUploading ? <Loader2 className="w-6 h-6 animate-spin" /> : <ImagePlus className="w-6 h-6" />}
                 <span className="text-sm">{imgUploading ? 'Enviando...' : 'Clique para adicionar imagem'}</span>
                 <span className="text-xs opacity-60">JPG, PNG, WebP — máx. 5 MB</span>
               </button>
@@ -314,12 +425,7 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
           {/* ── Informações básicas ── */}
           <div className="space-y-1">
             <Label htmlFor="prod-name">Nome *</Label>
-            <Input
-              id="prod-name"
-              value={form.name}
-              onChange={(e) => set('name')(e.target.value)}
-              placeholder="Ex: Pão de Queijo"
-            />
+            <Input id="prod-name" value={form.name} onChange={(e) => set('name')(e.target.value)} placeholder="Ex: Pão de Queijo" />
           </div>
 
           <div className="space-y-1">
@@ -336,50 +442,163 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
 
           <div className="space-y-1">
             <Label htmlFor="prod-desc">Descrição</Label>
-            <Textarea
-              id="prod-desc"
-              value={form.description}
-              onChange={(e) => set('description')(e.target.value)}
-              placeholder="Descrição opcional"
-              rows={2}
-            />
+            <Textarea id="prod-desc" value={form.description} onChange={(e) => set('description')(e.target.value)} placeholder="Descrição opcional" rows={2} />
           </div>
 
           {/* ── Preços ── */}
           <Separator />
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Preços</p>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="prod-cost">Preço de Custo (R$)</Label>
-              <Input
-                id="prod-cost"
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.cost_price}
-                onChange={(e) => set('cost_price')(e.target.value)}
-                placeholder="0,00"
-              />
+          {/* Toggle insumos */}
+          <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+            <div>
+              <p className="text-sm font-medium">Composto por insumos</p>
+              <p className="text-xs text-muted-foreground">O custo é calculado automaticamente a partir dos insumos</p>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="prod-price">Preço de Venda (R$) *</Label>
-              <Input
-                id="prod-price"
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.price}
-                onChange={(e) => set('price')(e.target.value)}
-                placeholder="0,00"
-              />
-            </div>
+            <Switch
+              checked={form.has_ingredients}
+              onCheckedChange={(v) => {
+                setForm((f) => ({ ...f, has_ingredients: v }))
+                if (!v) setLocalIngredients([])
+              }}
+            />
           </div>
+
+          {/* Custo manual — só aparece quando has_ingredients está desligado */}
+          {!form.has_ingredients && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="prod-cost">Preço de Custo (R$)</Label>
+                <Input id="prod-cost" type="number" min={0} step="0.01" value={form.cost_price} onChange={(e) => set('cost_price')(e.target.value)} placeholder="0,00" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="prod-price">Preço de Venda (R$) *</Label>
+                <Input id="prod-price" type="number" min={0} step="0.01" value={form.price} onChange={(e) => set('price')(e.target.value)} placeholder="0,00" />
+              </div>
+            </div>
+          )}
+
+          {/* Preço de venda — quando has_ingredients, aparece sozinho */}
+          {form.has_ingredients && (
+            <div className="space-y-1">
+              <Label htmlFor="prod-price2">Preço de Venda (R$) *</Label>
+              <Input id="prod-price2" type="number" min={0} step="0.01" value={form.price} onChange={(e) => set('price')(e.target.value)} placeholder="0,00" />
+            </div>
+          )}
+
           {margem !== null && (
             <p className={`text-xs -mt-1 ${margem >= 0 ? 'text-green-600' : 'text-destructive'}`}>
               Margem de contribuição: {margem.toFixed(1)}%
               {fichaCusto !== undefined && ` (ficha técnica: ${formatCurrency(fichaCusto)})`}
             </p>
+          )}
+
+          {/* ── Seção de Insumos ── */}
+          {form.has_ingredients && (
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Composição / Insumos</p>
+                {localIngredients.length > 0 && (
+                  <span className="text-sm font-bold text-primary">
+                    Custo total: {formatCurrency(ingredientsTotalCost)}
+                  </span>
+                )}
+              </div>
+
+              {/* Lista de insumos adicionados */}
+              {localIngredients.length === 0 ? (
+                <div className="flex flex-col items-center py-4 text-muted-foreground gap-1">
+                  <Package className="w-6 h-6 opacity-30" />
+                  <p className="text-xs">Nenhum insumo adicionado ainda</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b text-muted-foreground">
+                        <th className="pb-1.5 text-left font-medium">Insumo</th>
+                        <th className="pb-1.5 text-left font-medium">Un.</th>
+                        <th className="pb-1.5 text-left font-medium w-20">Qtd</th>
+                        <th className="pb-1.5 text-right font-medium">Custo Un.</th>
+                        <th className="pb-1.5 text-right font-medium">Total</th>
+                        <th className="pb-1.5 w-6" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {localIngredients.map((li) => (
+                        <tr key={li.ingredient_id} className="border-b last:border-0">
+                          <td className="py-1.5 pr-2 font-medium">{li.ingredient.name}</td>
+                          <td className="py-1.5 pr-2 text-muted-foreground">{li.ingredient.unit}</td>
+                          <td className="py-1.5 pr-2">
+                            <Input
+                              className="h-6 w-16 text-xs px-1.5"
+                              type="number"
+                              min={0.001}
+                              step="any"
+                              value={li.quantity}
+                              onChange={(e) => handleUpdateQty(li.ingredient_id, e.target.value)}
+                            />
+                          </td>
+                          <td className="py-1.5 pr-2 text-right text-muted-foreground">
+                            {formatCurrency(li.ingredient.cost_per_unit)}
+                          </td>
+                          <td className="py-1.5 pr-2 text-right font-semibold">
+                            {formatCurrency(li.quantity * li.ingredient.cost_per_unit)}
+                          </td>
+                          <td className="py-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveIngredient(li.ingredient_id)}
+                              className="text-destructive hover:text-destructive/80"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Adicionar insumo */}
+              <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t">
+                <Select value={addIngId} onValueChange={setAddIngId}>
+                  <SelectTrigger className="flex-1 h-8 text-xs">
+                    <SelectValue placeholder="Selecionar insumo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableIngredients.length === 0
+                      ? <SelectItem value="__none__" disabled>Todos os insumos já adicionados</SelectItem>
+                      : availableIngredients.map((ing) => (
+                          <SelectItem key={ing.id} value={ing.id}>
+                            {ing.name} ({ing.unit}) — {formatCurrency(ing.cost_per_unit)}/{ing.unit}
+                          </SelectItem>
+                        ))
+                    }
+                  </SelectContent>
+                </Select>
+                <Input
+                  className="w-24 h-8 text-xs"
+                  type="number"
+                  min={0.001}
+                  step="any"
+                  placeholder="Qtd"
+                  value={addQty}
+                  onChange={(e) => setAddQty(e.target.value)}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8"
+                  onClick={handleAddIngredient}
+                  disabled={!addIngId || !addQty || Number(addQty) <= 0}
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  Adicionar
+                </Button>
+              </div>
+            </div>
           )}
 
           {/* ── Estoque ── */}
@@ -388,14 +607,7 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
 
           <div className="space-y-1">
             <Label htmlFor="prod-stock">Quantidade em Estoque</Label>
-            <Input
-              id="prod-stock"
-              type="number"
-              min={0}
-              step="0.001"
-              value={form.stock_quantity}
-              onChange={(e) => set('stock_quantity')(e.target.value)}
-            />
+            <Input id="prod-stock" type="number" min={0} step="0.001" value={form.stock_quantity} onChange={(e) => set('stock_quantity')(e.target.value)} />
             <p className="text-xs text-muted-foreground">
               A quantidade é baixada automaticamente ao lançar o item em uma comanda.
             </p>
@@ -414,67 +626,40 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
 
           {fiscalOpen && (
             <div className="space-y-4">
-              {/* NCM e CEST */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="prod-ncm">NCM</Label>
-                  <Input
-                    id="prod-ncm"
-                    value={form.ncm}
-                    onChange={(e) => set('ncm')(applyNcmMask(e.target.value))}
-                    placeholder="0000.00.00"
-                    maxLength={10}
-                    inputMode="numeric"
-                  />
+                  <Input id="prod-ncm" value={form.ncm} onChange={(e) => set('ncm')(applyNcmMask(e.target.value))} placeholder="0000.00.00" maxLength={10} inputMode="numeric" />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="prod-cest">CEST</Label>
-                  <Input
-                    id="prod-cest"
-                    value={form.cest}
-                    onChange={(e) => set('cest')(applyCestMask(e.target.value))}
-                    placeholder="00.000.00"
-                    maxLength={9}
-                    inputMode="numeric"
-                  />
+                  <Input id="prod-cest" value={form.cest} onChange={(e) => set('cest')(applyCestMask(e.target.value))} placeholder="00.000.00" maxLength={9} inputMode="numeric" />
                 </div>
               </div>
-
-              {/* CFOP */}
               <div className="space-y-1">
                 <Label>CFOP</Label>
                 <Select value={form.cfop} onValueChange={set('cfop')}>
                   <SelectTrigger><SelectValue placeholder="Selecionar CFOP..." /></SelectTrigger>
                   <SelectContent>
-                    {CFOP_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                    ))}
+                    {CFOP_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* CSOSN */}
               <div className="space-y-1">
                 <Label>CSOSN <span className="text-muted-foreground font-normal text-xs">(Simples Nacional)</span></Label>
                 <Select value={form.csosn} onValueChange={set('csosn')}>
                   <SelectTrigger><SelectValue placeholder="Selecionar CSOSN..." /></SelectTrigger>
                   <SelectContent>
-                    {CSOSN_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                    ))}
+                    {CSOSN_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Origem */}
               <div className="space-y-1">
                 <Label>Origem</Label>
                 <Select value={form.origem} onValueChange={set('origem')}>
                   <SelectTrigger><SelectValue placeholder="Selecionar origem..." /></SelectTrigger>
                   <SelectContent>
-                    {ORIGEM_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
-                    ))}
+                    {ORIGEM_OPTIONS.map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -487,20 +672,10 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor="prod-order">Ordem de Exibição</Label>
-              <Input
-                id="prod-order"
-                type="number"
-                min={0}
-                value={form.sort_order}
-                onChange={(e) => setForm((f) => ({ ...f, sort_order: Number(e.target.value) }))}
-              />
+              <Input id="prod-order" type="number" min={0} value={form.sort_order} onChange={(e) => setForm((f) => ({ ...f, sort_order: Number(e.target.value) }))} />
             </div>
             <div className="flex items-end pb-1 gap-3">
-              <Switch
-                id="prod-active"
-                checked={form.active}
-                onCheckedChange={(v) => setForm((f) => ({ ...f, active: v }))}
-              />
+              <Switch id="prod-active" checked={form.active} onCheckedChange={(v) => setForm((f) => ({ ...f, active: v }))} />
               <Label htmlFor="prod-active">Ativo</Label>
             </div>
           </div>

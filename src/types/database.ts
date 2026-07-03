@@ -36,10 +36,18 @@ export interface Product {
   csosn: string | null
   origem: number | null
   image_url: string | null
+  has_ingredients: boolean
   active: boolean
   sort_order: number
   created_at: string
   categories?: Category
+}
+
+export interface ProductIngredient {
+  product_id: string
+  ingredient_id: string
+  quantity: number
+  ingredients: Ingredient
 }
 
 export interface Ingredient {

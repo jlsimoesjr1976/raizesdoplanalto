@@ -84,14 +84,14 @@ export function AdicionarItemModal({ open, onClose, onConfirm }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-0">
+      <DialogContent className="max-w-2xl max-h-[92vh] flex flex-col p-0">
+        <DialogHeader className="px-4 pt-4 pb-0 sm:px-6 sm:pt-6">
           <DialogTitle>Adicionar Itens ao Pedido</DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-1 min-h-0 gap-0">
+        <div className="flex flex-col sm:flex-row flex-1 min-h-0 gap-0">
           {/* Catálogo */}
-          <div className="flex-1 flex flex-col min-w-0 px-6 pb-4">
+          <div className="flex-1 flex flex-col min-w-0 px-4 pb-4 sm:px-6">
             <div className="relative my-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -122,7 +122,7 @@ export function AdicionarItemModal({ open, onClose, onConfirm }: Props) {
           </div>
 
           {/* Carrinho */}
-          <div className="w-64 border-l flex flex-col bg-muted/30">
+          <div className="w-full sm:w-64 border-t sm:border-t-0 sm:border-l flex flex-col bg-muted/30">
             <div className="px-4 py-3 border-b">
               <div className="flex items-center gap-2 font-semibold text-sm">
                 <ShoppingCart className="w-4 h-4" />
