@@ -36,6 +36,7 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
   const [showFechar, setShowFechar] = useState(false)
   const [editingPeople, setEditingPeople] = useState(false)
   const [peopleInput, setPeopleInput] = useState('')
+  const [liberando, setLiberando] = useState(false)
 
   const loadOrder = useCallback(async () => {
     if (!orderId) return
@@ -91,6 +92,23 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
   async function handleRemoveItem(itemId: string) {
     await supabase.from('order_items').delete().eq('id', itemId)
     await loadOrder()
+  }
+
+  // Sem consumo (total 0,00): encerra a comanda e libera a mesa diretamente
+  async function handleLiberarMesa() {
+    if (!order) return
+    if (!confirm(`Liberar a Mesa ${order.table_number}? A comanda será encerrada sem consumo.`)) return
+    setLiberando(true)
+    await supabase
+      .from('orders')
+      .update({ status: 'cancelled', closed_at: new Date().toISOString() })
+      .eq('id', order.id)
+    if (order.table_id) {
+      await supabase.from('tables').update({ status: 'free' }).eq('id', order.table_id)
+    }
+    setLiberando(false)
+    onUpdated()
+    onClose()
   }
 
   async function savePeopleCount() {
@@ -264,18 +282,28 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
                   variant="outline"
                   className="flex-1"
                   onClick={() => setShowAddItem(true)}
-                  disabled={items.length === 0 && false}
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   Adicionar
                 </Button>
-                <Button
-                  className="flex-1 bg-green-600 hover:bg-green-700"
-                  onClick={() => setShowFechar(true)}
-                >
-                  <Receipt className="w-4 h-4 mr-1" />
-                  Fechar Conta
-                </Button>
+                {total === 0 ? (
+                  <Button
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    onClick={handleLiberarMesa}
+                    disabled={liberando}
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-1" />
+                    {liberando ? 'Liberando...' : 'Liberar Mesa'}
+                  </Button>
+                ) : (
+                  <Button
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    onClick={() => setShowFechar(true)}
+                  >
+                    <Receipt className="w-4 h-4 mr-1" />
+                    Fechar Conta
+                  </Button>
+                )}
               </div>
             </div>
           )}

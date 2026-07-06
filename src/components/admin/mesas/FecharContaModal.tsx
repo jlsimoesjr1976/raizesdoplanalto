@@ -71,7 +71,8 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
   }, 0)
   const remaining = Math.max(0, grandTotal - totalPaid)
   const overpaid = totalPaid > grandTotal ? totalPaid - grandTotal : 0
-  const isComplete = totalPaid >= grandTotal && grandTotal > 0
+  // Regra: se o total devido for 0,00, sempre permitir fechar e liberar a mesa
+  const isComplete = totalPaid >= grandTotal
 
   function addPayment() {
     setPayments((prev) => [...prev, { id: nextId++, method: 'pix', amount: '' }])
