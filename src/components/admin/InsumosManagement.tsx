@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import InsumoFormModal from './InsumoFormModal'
+import { ImportXlsxModal } from './ImportXlsxModal'
+import { insumosImportConfig } from '@/lib/importConfigs'
 import {
-  Plus, Search, Pencil, Trash2, AlertTriangle, Package, TrendingDown
+  Plus, Search, Pencil, Trash2, AlertTriangle, Package, TrendingDown, FileSpreadsheet
 } from 'lucide-react'
 
 function formatBRL(v: number, decimals = 2) {
@@ -28,6 +30,7 @@ export default function InsumosManagement() {
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Ingredient | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const { data: ingredients = [], isLoading } = useQuery({
     queryKey: ['ingredients'],
@@ -88,9 +91,14 @@ export default function InsumosManagement() {
             Gerencie os ingredientes e insumos utilizados na ficha técnica dos produtos
           </p>
         </div>
-        <Button onClick={openNew} className="gap-2 shrink-0">
-          <Plus className="w-4 h-4" /> Novo Insumo
-        </Button>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="outline" onClick={() => setImportOpen(true)} className="gap-2">
+            <FileSpreadsheet className="w-4 h-4" /> Importar
+          </Button>
+          <Button onClick={openNew} className="gap-2">
+            <Plus className="w-4 h-4" /> Novo Insumo
+          </Button>
+        </div>
       </div>
 
       {/* Resumo */}
@@ -229,6 +237,13 @@ export default function InsumosManagement() {
         ingredient={editing}
         onClose={() => setModalOpen(false)}
         onSave={handleSave}
+      />
+
+      <ImportXlsxModal
+        open={importOpen}
+        config={insumosImportConfig}
+        onClose={() => setImportOpen(false)}
+        onImported={() => qc.invalidateQueries({ queryKey: ['ingredients'] })}
       />
     </div>
   )

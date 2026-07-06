@@ -16,7 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, ClipboardList, UtensilsCrossed, Package, AlertTriangle, Copy, Camera, Loader2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, ClipboardList, UtensilsCrossed, Package, AlertTriangle, Copy, Camera, Loader2, FileSpreadsheet } from 'lucide-react'
+import { ImportXlsxModal } from './ImportXlsxModal'
+import { produtosImportConfig } from '@/lib/importConfigs'
 
 const CATEGORY_COLORS = [
   'bg-amber-100 text-amber-800',
@@ -168,6 +170,7 @@ export function ProdutosTab() {
   const [editOpen, setEditOpen] = useState(false)
   const [fichaProduct, setFichaProduct] = useState<ProductWithCategory | null>(null)
   const [fichaOpen, setFichaOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const { data: products = [], isLoading: loadingProducts } = useQuery({
     queryKey: ['products'],
@@ -241,12 +244,18 @@ export function ProdutosTab() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="text-lg font-semibold">Produtos</h2>
-        <Button size="sm" onClick={() => openEdit(null)}>
-          <Plus className="w-4 h-4 mr-1" />
-          Novo Produto
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="w-4 h-4 mr-1" />
+            Importar
+          </Button>
+          <Button size="sm" onClick={() => openEdit(null)}>
+            <Plus className="w-4 h-4 mr-1" />
+            Novo Produto
+          </Button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -330,6 +339,16 @@ export function ProdutosTab() {
         open={fichaOpen}
         product={fichaProduct}
         onClose={() => { setFichaOpen(false); setFichaProduct(null) }}
+      />
+
+      <ImportXlsxModal
+        open={importOpen}
+        config={produtosImportConfig}
+        onClose={() => setImportOpen(false)}
+        onImported={() => {
+          queryClient.invalidateQueries({ queryKey: ['products'] })
+          queryClient.invalidateQueries({ queryKey: ['categories'] })
+        }}
       />
     </div>
   )
