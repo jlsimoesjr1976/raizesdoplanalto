@@ -136,7 +136,28 @@ export interface Freelancer {
   created_at: string
 }
 
+export interface Supplier {
+  id: string
+  name: string
+  cnpj: string | null
+  phone: string | null
+  email: string | null
+  notes: string | null
+  created_at: string
+}
+
+export interface Employee {
+  id: string
+  name: string
+  cpf: string | null
+  phone: string | null
+  position: string | null
+  salary: number | null
+  created_at: string
+}
+
 export type FinancialEntryType = 'payment' | 'receipt'
+export type BeneficiaryType = 'freelancer' | 'supplier' | 'employee'
 
 export interface FinancialAttachment {
   name: string
@@ -152,6 +173,9 @@ export interface FinancialEntry {
   entry_date: string
   notes: string | null
   attachments: FinancialAttachment[]
+  beneficiary_type: BeneficiaryType | null
+  beneficiary_id: string | null
+  beneficiary_name: string | null
   created_at: string
 }
 

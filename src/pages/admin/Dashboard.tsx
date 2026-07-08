@@ -10,6 +10,8 @@ import {
   Package,
   Users,
   BriefcaseBusiness,
+  Truck,
+  UserCog,
   Wallet,
   Megaphone,
   Settings,
@@ -26,6 +28,8 @@ import { ConfiguracoesManagement } from '@/components/admin/ConfiguracoesManagem
 import { ClientesManagement } from '@/components/admin/clientes/ClientesManagement'
 import { FreelancersManagement } from '@/components/admin/freelancers/FreelancersManagement'
 import { FinanceiroManagement } from '@/components/admin/financeiro/FinanceiroManagement'
+import { FornecedoresManagement } from '@/components/admin/fornecedores/FornecedoresManagement'
+import { FuncionariosManagement } from '@/components/admin/funcionarios/FuncionariosManagement'
 import { DashboardOverview } from '@/components/admin/DashboardOverview'
 
 type Tab =
@@ -36,6 +40,8 @@ type Tab =
   | 'stock'
   | 'customers'
   | 'freelancers'
+  | 'suppliers'
+  | 'employees'
   | 'finance'
   | 'marketing'
   | 'settings'
@@ -48,6 +54,8 @@ const NAV_ITEMS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'stock', label: 'Insumos', icon: Package },
   { id: 'customers', label: 'Clientes', icon: Users },
   { id: 'freelancers', label: 'Freelancers', icon: BriefcaseBusiness },
+  { id: 'suppliers', label: 'Fornecedores', icon: Truck },
+  { id: 'employees', label: 'Funcionários', icon: UserCog },
   { id: 'finance', label: 'Financeiro', icon: Wallet },
   { id: 'marketing', label: 'Marketing', icon: Megaphone },
   { id: 'settings', label: 'Configurações', icon: Settings },
@@ -79,6 +87,8 @@ export default function AdminDashboard() {
     if (activeTab === 'tables') return <MesasManagement />
     if (activeTab === 'customers') return <ClientesManagement />
     if (activeTab === 'freelancers') return <FreelancersManagement />
+    if (activeTab === 'suppliers') return <FornecedoresManagement />
+    if (activeTab === 'employees') return <FuncionariosManagement />
     if (activeTab === 'finance') return <FinanceiroManagement />
     if (activeTab === 'settings') return <ConfiguracoesManagement />
     return <PlaceholderTab icon={activeItem.icon} label={activeItem.label} />

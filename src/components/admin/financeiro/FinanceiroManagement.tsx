@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Plus, Search, Pencil, Trash2, Paperclip, CalendarDays,
-  ArrowDownCircle, ArrowUpCircle, Wallet, CalendarRange, CalendarClock,
+  ArrowDownCircle, ArrowUpCircle, Wallet, CalendarRange, CalendarClock, User,
 } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import { LancamentoFormModal } from './LancamentoFormModal'
@@ -87,9 +87,13 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
     { title: 'Acumulado do Mês', value: totalMonth, icon: CalendarDays, hint: `desde ${formatDate(monthStart)}` },
   ]
 
-  const filtered = entries.filter((e) =>
-    e.description.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = entries.filter((e) => {
+    const q = search.toLowerCase()
+    return (
+      e.description.toLowerCase().includes(q) ||
+      (e.beneficiary_name ?? '').toLowerCase().includes(q)
+    )
+  })
 
   async function handleDelete(e: FinancialEntry) {
     if (!confirm(`Tem certeza que deseja excluir o ${label.toLowerCase()} "${e.description}" de ${formatCurrency(Number(e.amount))}?\n\nEsta ação não pode ser desfeita.`)) return
@@ -174,6 +178,12 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
                     <CalendarDays className="w-3 h-3" />
                     {formatDate(e.entry_date)}
                   </span>
+                  {e.beneficiary_name && (
+                    <span className="flex items-center gap-1">
+                      <User className="w-3 h-3" />
+                      {e.beneficiary_name}
+                    </span>
+                  )}
                   {e.attachments?.length > 0 && (
                     <span className="flex items-center gap-1">
                       <Paperclip className="w-3 h-3" />

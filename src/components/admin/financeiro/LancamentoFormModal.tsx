@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, FormEvent } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -6,9 +7,26 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { Paperclip, X, Loader2, FileText, Image as ImageIcon, FileSpreadsheet, File } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
-import type { FinancialAttachment, FinancialEntry, FinancialEntryType } from '@/types/database'
+import type {
+  BeneficiaryType, FinancialAttachment, FinancialEntry, FinancialEntryType,
+} from '@/types/database'
+
+const BENEFICIARY_GROUPS: { type: BeneficiaryType; table: string; label: string }[] = [
+  { type: 'freelancer', table: 'freelancers', label: 'Freelancers' },
+  { type: 'supplier', table: 'suppliers', label: 'Fornecedores' },
+  { type: 'employee', table: 'employees', label: 'Funcionários' },
+]
+
+interface BeneficiaryOption {
+  type: BeneficiaryType
+  id: string
+  name: string
+}
 
 const MAX_ATTACHMENTS = 5
 
@@ -34,12 +52,30 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
   const [entryDate, setEntryDate] = useState('')
   const [notes, setNotes] = useState('')
   const [attachments, setAttachments] = useState<FinancialAttachment[]>([])
+  const [beneficiary, setBeneficiary] = useState('') // formato "tipo:id"
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const label = type === 'payment' ? 'Pagamento' : 'Recebimento'
+
+  // Beneficiários: freelancers + fornecedores + funcionários (só em Pagamentos)
+  const { data: beneficiaries = [] } = useQuery({
+    queryKey: ['beneficiaries'],
+    enabled: open && type === 'payment',
+    queryFn: async () => {
+      const results = await Promise.all(
+        BENEFICIARY_GROUPS.map(async (g) => {
+          const { data } = await supabase.from(g.table).select('id, name').order('name')
+          return (data ?? []).map((r: { id: string; name: string }) => ({
+            type: g.type, id: r.id, name: r.name,
+          } as BeneficiaryOption))
+        })
+      )
+      return results.flat()
+    },
+  })
 
   useEffect(() => {
     if (open) {
@@ -51,12 +87,18 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
         setEntryDate(entry.entry_date)
         setNotes(entry.notes ?? '')
         setAttachments(entry.attachments ?? [])
+        setBeneficiary(
+          entry.beneficiary_type && entry.beneficiary_id
+            ? `${entry.beneficiary_type}:${entry.beneficiary_id}`
+            : ''
+        )
       } else {
         setDescription('')
         setAmount('')
         setEntryDate(new Date().toISOString().split('T')[0])
         setNotes('')
         setAttachments([])
+        setBeneficiary('')
       }
     }
   }, [open, entry])
@@ -105,6 +147,8 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
     if (!entryDate) { setError('Informe a data.'); return }
 
     setSaving(true)
+    const [benType, benId] = beneficiary ? beneficiary.split(':') : [null, null]
+    const benOption = beneficiaries.find((b) => b.type === benType && b.id === benId)
     const payload = {
       type,
       description: description.trim(),
@@ -112,6 +156,9 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
       entry_date: entryDate,
       notes: notes.trim() || null,
       attachments,
+      beneficiary_type: (benType as BeneficiaryType) ?? null,
+      beneficiary_id: benId,
+      beneficiary_name: benOption?.name ?? null,
     }
 
     const { error: err } = entry
@@ -143,6 +190,42 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
               autoFocus
             />
           </div>
+
+          {/* Beneficiário — apenas em Pagamentos */}
+          {type === 'payment' && (
+            <div className="space-y-1.5">
+              <Label>Beneficiário</Label>
+              <Select value={beneficiary} onValueChange={setBeneficiary}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecionar beneficiário..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {beneficiaries.length === 0 && (
+                    <SelectItem value="__none__" disabled>
+                      Nenhum cadastro encontrado
+                    </SelectItem>
+                  )}
+                  {BENEFICIARY_GROUPS.map((g) => {
+                    const options = beneficiaries.filter((b) => b.type === g.type)
+                    if (options.length === 0) return null
+                    return (
+                      <div key={g.type}>
+                        <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{g.label}</p>
+                        {options.map((b) => (
+                          <SelectItem key={`${b.type}:${b.id}`} value={`${b.type}:${b.id}`}>
+                            {b.name}
+                          </SelectItem>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Freelancers, fornecedores ou funcionários cadastrados no sistema.
+              </p>
+            </div>
+          )}
 
           {/* Valor + Data */}
           <div className="grid grid-cols-2 gap-3">
