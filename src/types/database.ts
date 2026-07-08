@@ -136,6 +136,25 @@ export interface Freelancer {
   created_at: string
 }
 
+export type FinancialEntryType = 'payment' | 'receipt'
+
+export interface FinancialAttachment {
+  name: string
+  url: string
+  path: string
+}
+
+export interface FinancialEntry {
+  id: string
+  type: FinancialEntryType
+  description: string
+  amount: number
+  entry_date: string
+  notes: string | null
+  attachments: FinancialAttachment[]
+  created_at: string
+}
+
 export interface MarketingCampaign {
   id: string
   name: string
