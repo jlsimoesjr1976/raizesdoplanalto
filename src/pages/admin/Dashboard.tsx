@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   LayoutDashboard,
@@ -15,19 +13,16 @@ import {
   Settings,
   Menu,
   X,
-  ShoppingBag,
-  DollarSign,
-  AlertTriangle,
   LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { formatCurrency } from '@/lib/utils'
 import logoImg from '@/assets/logo.png'
 import InsumosManagement from '@/components/admin/InsumosManagement'
 import { CardapioManagement } from '@/components/admin/CardapioManagement'
 import { MesasManagement } from '@/components/admin/mesas/MesasManagement'
 import { ConfiguracoesManagement } from '@/components/admin/ConfiguracoesManagement'
 import { ClientesManagement } from '@/components/admin/clientes/ClientesManagement'
+import { DashboardOverview } from '@/components/admin/DashboardOverview'
 
 type Tab =
   | 'dashboard'
@@ -57,78 +52,6 @@ function PlaceholderTab({ icon: Icon, label }: { icon: React.ElementType; label:
       <div className="text-center">
         <p className="text-lg font-medium">{label}</p>
         <p className="text-sm">Em desenvolvimento</p>
-      </div>
-    </div>
-  )
-}
-
-function DashboardOverview() {
-  const stats = [
-    {
-      title: 'Total Pedidos Hoje',
-      value: '47',
-      icon: ShoppingBag,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50',
-      badge: '+12% vs ontem',
-      badgeVariant: 'default' as const,
-    },
-    {
-      title: 'Receita Hoje',
-      value: formatCurrency(3842.5),
-      icon: DollarSign,
-      color: 'text-green-600',
-      bg: 'bg-green-50',
-      badge: '+8% vs ontem',
-      badgeVariant: 'default' as const,
-    },
-    {
-      title: 'Mesas Ocupadas',
-      value: '6 / 10',
-      icon: Table2,
-      color: 'text-amber-600',
-      bg: 'bg-amber-50',
-      badge: '60% ocupação',
-      badgeVariant: 'secondary' as const,
-    },
-    {
-      title: 'Estoque Crítico',
-      value: '3 itens',
-      icon: AlertTriangle,
-      color: 'text-red-600',
-      bg: 'bg-red-50',
-      badge: 'Atenção necessária',
-      badgeVariant: 'destructive' as const,
-    },
-  ]
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground">Visão Geral</h2>
-        <p className="text-muted-foreground text-sm mt-1">Resumo de hoje, {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {stats.map((stat) => (
-          <Card key={stat.title} className="border shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.title}
-              </CardTitle>
-              <div className={cn('p-2 rounded-lg', stat.bg)}>
-                <stat.icon className={cn('w-4 h-4', stat.color)} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <div className="mt-2">
-                <Badge variant={stat.badgeVariant} className="text-xs">
-                  {stat.badge}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
       </div>
     </div>
   )
