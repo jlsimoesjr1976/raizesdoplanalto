@@ -12,9 +12,23 @@ import {
   Plus, Search, Pencil, Trash2, Phone, Mail, Truck,
 } from 'lucide-react'
 import {
-  applyCnpjMask, applyPhoneMask,
+  applyCpfMask, applyCnpjMask, applyPhoneMask,
 } from '@/components/admin/freelancers/FreelancerFormModal'
 import type { Supplier } from '@/types/database'
+
+// CPF (11 dígitos) ou CNPJ (14 dígitos), decidido pelo tamanho digitado
+function applyCpfCnpjMask(v: string) {
+  const d = v.replace(/\D/g, '').slice(0, 14)
+  return d.length <= 11 ? applyCpfMask(d) : applyCnpjMask(d)
+}
+
+function docLabel(digits: string) {
+  return digits.length === 11 ? 'CPF' : 'CNPJ'
+}
+
+function docMask(digits: string) {
+  return digits.length === 11 ? applyCpfMask(digits) : applyCnpjMask(digits)
+}
 
 // ── Formulário ──────────────────────────────────────────────────────────────
 
@@ -39,7 +53,7 @@ function FornecedorFormModal({ open, supplier, onClose, onSaved }: FormProps) {
       setError('')
       if (supplier) {
         setName(supplier.name)
-        setCnpj(supplier.cnpj ? applyCnpjMask(supplier.cnpj) : '')
+        setCnpj(supplier.cnpj ? applyCpfCnpjMask(supplier.cnpj) : '')
         setPhone(supplier.phone ? applyPhoneMask(supplier.phone) : '')
         setEmail(supplier.email ?? '')
         setNotes(supplier.notes ?? '')
@@ -53,7 +67,10 @@ function FornecedorFormModal({ open, supplier, onClose, onSaved }: FormProps) {
     e.preventDefault()
     if (!name.trim()) { setError('O nome é obrigatório.'); return }
     const cnpjDigits = cnpj.replace(/\D/g, '')
-    if (cnpjDigits && cnpjDigits.length !== 14) { setError('CNPJ inválido — informe os 14 dígitos.'); return }
+    if (cnpjDigits && cnpjDigits.length !== 11 && cnpjDigits.length !== 14) {
+      setError('Documento inválido — informe 11 dígitos (CPF) ou 14 dígitos (CNPJ).')
+      return
+    }
 
     setSaving(true)
     const payload = {
@@ -84,8 +101,11 @@ function FornecedorFormModal({ open, supplier, onClose, onSaved }: FormProps) {
             <Input id="sup-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do fornecedor" autoFocus />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="sup-cnpj">CNPJ</Label>
-            <Input id="sup-cnpj" value={cnpj} onChange={(e) => setCnpj(applyCnpjMask(e.target.value))} placeholder="00.000.000/0000-00" inputMode="numeric" maxLength={18} />
+            <Label htmlFor="sup-cnpj">CPF / CNPJ</Label>
+            <Input id="sup-cnpj" value={cnpj} onChange={(e) => setCnpj(applyCpfCnpjMask(e.target.value))} placeholder="CPF ou CNPJ" inputMode="numeric" maxLength={18} />
+            <p className="text-xs text-muted-foreground">
+              Pessoa física: informe o CPF (11 dígitos). Pessoa jurídica: CNPJ (14 dígitos).
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -160,7 +180,7 @@ export function FornecedoresManagement() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar por nome ou CNPJ..."
+          placeholder="Buscar por nome, CPF ou CNPJ..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"
@@ -190,7 +210,7 @@ export function FornecedoresManagement() {
               <div className="flex-1 min-w-0">
                 <span className="font-medium">{s.name}</span>
                 <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-muted-foreground">
-                  {s.cnpj && <span>CNPJ: {applyCnpjMask(s.cnpj)}</span>}
+                  {s.cnpj && <span>{docLabel(s.cnpj)}: {docMask(s.cnpj)}</span>}
                   {s.phone && (
                     <span className="flex items-center gap-1">
                       <Phone className="w-3 h-3" />
