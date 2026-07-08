@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
-  ShoppingBag, DollarSign, Table2, AlertTriangle, Clock, User, Package, Receipt,
+  ShoppingBag, DollarSign, Table2, AlertTriangle, Clock, User, Package, Receipt, ClipboardList,
 } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import type { Ingredient, Order, Product, Table } from '@/types/database'
@@ -55,7 +55,7 @@ const ORDER_STATUS = {
   cancelled: { label: 'Cancelada', className: 'bg-gray-100 text-gray-600' },
 }
 
-type DetailCard = 'orders' | 'revenue' | 'tables' | 'stock' | null
+type DetailCard = 'orders' | 'revenue' | 'tables' | 'open-orders' | 'stock' | null
 
 // ── Componente ──────────────────────────────────────────────────────────────
 
@@ -158,6 +158,8 @@ export function DashboardOverview() {
   )
   const stockCritical = criticalIngredients.length + lowProducts.length
 
+  const openToday = todayOrders.filter((o) => o.status === 'open')
+
   const ordersBadge = pctBadge(ordersCount, ordersYesterday)
   const revenueBadge = pctBadge(revenue, revenueYesterday)
 
@@ -193,6 +195,16 @@ export function DashboardOverview() {
       badgeVariant: 'secondary' as const,
     },
     {
+      id: 'open-orders' as const,
+      title: 'Comandas de Hoje não Fechadas',
+      value: String(openToday.length),
+      icon: ClipboardList,
+      color: openToday.length > 0 ? 'text-purple-600' : 'text-green-600',
+      bg: openToday.length > 0 ? 'bg-purple-50' : 'bg-green-50',
+      badge: openToday.length > 0 ? 'Aguardando fechamento' : 'Todas fechadas',
+      badgeVariant: 'secondary' as const,
+    },
+    {
       id: 'stock' as const,
       title: 'Estoque Crítico',
       value: `${stockCritical} ite${stockCritical === 1 ? 'm' : 'ns'}`,
@@ -215,7 +227,7 @@ export function DashboardOverview() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {stats.map((stat) => (
           <Card
             key={stat.id}
@@ -374,6 +386,43 @@ export function DashboardOverview() {
                     </div>
                   )
                 })}
+              </div>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Popup: Comandas de Hoje não Fechadas ── */}
+      <Dialog open={detail === 'open-orders'} onOpenChange={(v) => !v && setDetail(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-purple-600" />
+              Comandas de Hoje não Fechadas ({openToday.length})
+            </DialogTitle>
+          </DialogHeader>
+          {openToday.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">Todas as comandas de hoje foram fechadas. ✅</p>
+          ) : (
+            <ScrollArea className="max-h-[55vh]">
+              <div className="space-y-2 pr-2">
+                {openToday.map((o) => (
+                  <div key={o.id} className="flex items-center gap-3 p-3 rounded-lg border">
+                    <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold text-sm shrink-0">
+                      {o.table_number ?? '—'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        Mesa {o.table_number ?? '—'}{o.customer_name ? ` · ${o.customer_name}` : ''}
+                      </p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        aberta às {hora(o.created_at)} · {tempoAberta(o.created_at)}
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold shrink-0">{formatCurrency(Number(o.total))}</p>
+                  </div>
+                ))}
               </div>
             </ScrollArea>
           )}
