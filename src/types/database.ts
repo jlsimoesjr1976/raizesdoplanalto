@@ -124,6 +124,18 @@ export interface Customer {
   created_at: string
 }
 
+export interface Freelancer {
+  id: string
+  name: string
+  cpf: string
+  has_mei: boolean
+  cnpj: string | null
+  phone: string | null
+  daily_rate: number
+  registration_date: string
+  created_at: string
+}
+
 export interface MarketingCampaign {
   id: string
   name: string

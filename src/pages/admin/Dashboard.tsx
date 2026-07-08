@@ -9,6 +9,7 @@ import {
   Table2,
   Package,
   Users,
+  BriefcaseBusiness,
   Megaphone,
   Settings,
   Menu,
@@ -22,6 +23,7 @@ import { CardapioManagement } from '@/components/admin/CardapioManagement'
 import { MesasManagement } from '@/components/admin/mesas/MesasManagement'
 import { ConfiguracoesManagement } from '@/components/admin/ConfiguracoesManagement'
 import { ClientesManagement } from '@/components/admin/clientes/ClientesManagement'
+import { FreelancersManagement } from '@/components/admin/freelancers/FreelancersManagement'
 import { DashboardOverview } from '@/components/admin/DashboardOverview'
 
 type Tab =
@@ -31,6 +33,7 @@ type Tab =
   | 'tables'
   | 'stock'
   | 'customers'
+  | 'freelancers'
   | 'marketing'
   | 'settings'
 
@@ -41,6 +44,7 @@ const NAV_ITEMS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'tables', label: 'Mesas', icon: Table2 },
   { id: 'stock', label: 'Insumos', icon: Package },
   { id: 'customers', label: 'Clientes', icon: Users },
+  { id: 'freelancers', label: 'Freelancers', icon: BriefcaseBusiness },
   { id: 'marketing', label: 'Marketing', icon: Megaphone },
   { id: 'settings', label: 'Configurações', icon: Settings },
 ]
@@ -70,6 +74,7 @@ export default function AdminDashboard() {
     if (activeTab === 'menu') return <CardapioManagement />
     if (activeTab === 'tables') return <MesasManagement />
     if (activeTab === 'customers') return <ClientesManagement />
+    if (activeTab === 'freelancers') return <FreelancersManagement />
     if (activeTab === 'settings') return <ConfiguracoesManagement />
     return <PlaceholderTab icon={activeItem.icon} label={activeItem.label} />
   }
