@@ -183,8 +183,17 @@ export interface FinancialEntry {
   beneficiary_id: string | null
   beneficiary_name: string | null
   history: FinancialHistoryItem[]
+  paid: boolean
+  paid_at: string | null
+  payment_method: SettlementMethod | null
+  fine: number
+  interest: number
+  final_amount: number | null
+  receipt: FinancialAttachment | null
   created_at: string
 }
+
+export type SettlementMethod = 'pix' | 'boleto' | 'credito' | 'debito' | 'dinheiro'
 
 export interface MarketingCampaign {
   id: string

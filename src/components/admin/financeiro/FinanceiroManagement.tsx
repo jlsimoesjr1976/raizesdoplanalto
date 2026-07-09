@@ -8,9 +8,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Plus, Search, Pencil, Trash2, Paperclip, CalendarDays,
   ArrowDownCircle, ArrowUpCircle, Wallet, CalendarRange, CalendarClock, User, History,
+  DollarSign, CheckCircle2, FileText,
 } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import { LancamentoFormModal } from './LancamentoFormModal'
+import { BaixaModal, settlementLabel } from './BaixaModal'
 import type { FinancialEntry, FinancialEntryType } from '@/types/database'
 
 // ── Datas (semana: domingo a sábado) ────────────────────────────────────────
@@ -47,11 +49,13 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editEntry, setEditEntry] = useState<FinancialEntry | null>(null)
+  const [baixaEntry, setBaixaEntry] = useState<FinancialEntry | null>(null)
 
   const isPayment = type === 'payment'
   const label = isPayment ? 'Pagamento' : 'Recebimento'
   const accentText = isPayment ? 'text-red-600' : 'text-green-600'
 
+  // Ordenado do vencimento mais próximo para o mais distante
   const { data: entries = [], isLoading } = useQuery({
     queryKey: ['financial-entries', type],
     queryFn: async () => {
@@ -59,8 +63,8 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
         .from('financial_entries')
         .select('*')
         .eq('type', type)
-        .order('entry_date', { ascending: false })
-        .order('created_at', { ascending: false })
+        .order('entry_date', { ascending: true })
+        .order('created_at', { ascending: true })
       if (error) throw error
       return data as FinancialEntry[]
     },
@@ -98,9 +102,10 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
   async function handleDelete(e: FinancialEntry) {
     if (!confirm(`Tem certeza que deseja excluir o ${label.toLowerCase()} "${e.description}" de ${formatCurrency(Number(e.amount))}?\n\nEsta ação não pode ser desfeita.`)) return
     await supabase.from('financial_entries').delete().eq('id', e.id)
-    // Remove anexos do storage (best effort)
-    if (e.attachments?.length) {
-      supabase.storage.from('financial-attachments').remove(e.attachments.map((a) => a.path))
+    // Remove anexos e comprovante do storage (best effort)
+    const paths = [...(e.attachments ?? []).map((a) => a.path), ...(e.receipt ? [e.receipt.path] : [])]
+    if (paths.length) {
+      supabase.storage.from('financial-attachments').remove(paths)
     }
     queryClient.invalidateQueries({ queryKey: ['financial-entries', type] })
   }
@@ -200,11 +205,42 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
                 </div>
               </div>
 
-              <p className={cn('font-semibold shrink-0', accentText)}>
-                {formatCurrency(Number(e.amount))}
-              </p>
+              <div className="text-right shrink-0">
+                <p className={cn('font-semibold', accentText)}>
+                  {formatCurrency(Number(e.paid && e.final_amount !== null ? e.final_amount : e.amount))}
+                </p>
+                {e.paid ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Baixado · {settlementLabel(e.payment_method)}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground">em aberto</span>
+                )}
+              </div>
 
               <div className="flex gap-1.5 shrink-0">
+                {!e.paid && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-green-600 hover:text-green-700 border-green-200 hover:bg-green-50"
+                    title="Efetuar baixa"
+                    onClick={() => setBaixaEntry(e)}
+                  >
+                    <DollarSign className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+                {e.paid && e.receipt && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    title="Abrir comprovante"
+                    onClick={() => window.open(e.receipt!.url, '_blank')}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                  </Button>
+                )}
                 <Button size="sm" variant="outline" title="Editar" onClick={() => { setEditEntry(e); setShowForm(true) }}>
                   <Pencil className="w-3.5 h-3.5" />
                 </Button>
@@ -229,6 +265,13 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
         entry={editEntry}
         onClose={() => { setShowForm(false); setEditEntry(null) }}
         onSaved={() => queryClient.invalidateQueries({ queryKey: ['financial-entries', type] })}
+      />
+
+      <BaixaModal
+        open={!!baixaEntry}
+        entry={baixaEntry}
+        onClose={() => setBaixaEntry(null)}
+        onSettled={() => queryClient.invalidateQueries({ queryKey: ['financial-entries', type] })}
       />
     </div>
   )
