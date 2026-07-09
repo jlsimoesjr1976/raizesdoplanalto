@@ -5,8 +5,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
-import { CheckCircle2, Percent, Store, MessageSquare, Eye, EyeOff } from 'lucide-react'
+import { CheckCircle2, Percent, Store, MessageSquare, Eye, EyeOff, CreditCard, Loader2, RefreshCw, XCircle } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/integrations/supabase/client'
+import { testConnection, listDevices, type PointDevice } from '@/lib/mercadopago'
 
 interface Settings {
   restaurant_name: string
@@ -15,6 +18,10 @@ interface Settings {
   evolution_api_url: string
   evolution_api_key: string
   evolution_instance: string
+  mp_environment: string
+  mp_public_key: string
+  mp_access_token: string
+  mp_device_id: string
 }
 
 const DEFAULTS: Settings = {
@@ -24,6 +31,10 @@ const DEFAULTS: Settings = {
   evolution_api_url: '',
   evolution_api_key: '',
   evolution_instance: '',
+  mp_environment: 'test',
+  mp_public_key: '',
+  mp_access_token: '',
+  mp_device_id: '',
 }
 
 async function loadSetting(key: string) {
@@ -41,29 +52,72 @@ export function ConfiguracoesManagement() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [showApiKey, setShowApiKey] = useState(false)
+  const [showMpToken, setShowMpToken] = useState(false)
+
+  // Estado da conexão / maquininhas Mercado Pago
+  const [mpTesting, setMpTesting] = useState(false)
+  const [mpStatus, setMpStatus] = useState<{ ok: boolean; message: string } | null>(null)
+  const [mpDevices, setMpDevices] = useState<PointDevice[]>([])
+  const [mpLoadingDevices, setMpLoadingDevices] = useState(false)
 
   useEffect(() => {
     async function load() {
-      const [name, percent, enabled, evoUrl, evoKey, evoInst] = await Promise.all([
+      const [name, percent, enabled, evoUrl, evoKey, evoInst, mpEnv, mpPk, mpToken, mpDevice] = await Promise.all([
         loadSetting('restaurant_name'),
         loadSetting('service_charge_percent'),
         loadSetting('service_charge_enabled'),
         loadSetting('evolution_api_url'),
         loadSetting('evolution_api_key'),
         loadSetting('evolution_instance'),
+        loadSetting('mp_environment'),
+        loadSetting('mp_public_key'),
+        loadSetting('mp_access_token'),
+        loadSetting('mp_device_id'),
       ])
+      const str = (v: unknown) => (v as string ?? '').replace(/^"|"$/g, '')
       setSettings({
         restaurant_name: typeof name === 'string' ? name : DEFAULTS.restaurant_name,
         service_charge_percent: typeof percent === 'number' ? percent : Number(percent ?? DEFAULTS.service_charge_percent),
         service_charge_enabled: enabled === undefined ? DEFAULTS.service_charge_enabled : Boolean(enabled),
-        evolution_api_url: (evoUrl as string ?? '').replace(/^"|"$/g, ''),
-        evolution_api_key: (evoKey as string ?? '').replace(/^"|"$/g, ''),
-        evolution_instance: (evoInst as string ?? '').replace(/^"|"$/g, ''),
+        evolution_api_url: str(evoUrl),
+        evolution_api_key: str(evoKey),
+        evolution_instance: str(evoInst),
+        mp_environment: str(mpEnv) || 'test',
+        mp_public_key: str(mpPk),
+        mp_access_token: str(mpToken),
+        mp_device_id: str(mpDevice),
       })
       setLoading(false)
     }
     load()
   }, [])
+
+  async function handleMpTest() {
+    setMpTesting(true)
+    setMpStatus(null)
+    // Garante que o token digitado está salvo antes do teste
+    await saveSetting('mp_access_token', settings.mp_access_token)
+    const result = await testConnection()
+    setMpStatus(
+      result.ok
+        ? { ok: true, message: `Conectado! Conta: ${result.nickname}` }
+        : { ok: false, message: result.error ?? 'Falha na conexão' }
+    )
+    setMpTesting(false)
+  }
+
+  async function handleMpLoadDevices() {
+    setMpLoadingDevices(true)
+    await saveSetting('mp_access_token', settings.mp_access_token)
+    const result = await listDevices()
+    setMpDevices(result.devices)
+    if (!result.ok) {
+      setMpStatus({ ok: false, message: result.error ?? 'Erro ao buscar maquininhas' })
+    } else if (result.devices.length === 0) {
+      setMpStatus({ ok: true, message: 'Conexão OK, mas nenhuma maquininha vinculada a esta conta ainda.' })
+    }
+    setMpLoadingDevices(false)
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -75,6 +129,10 @@ export function ConfiguracoesManagement() {
       saveSetting('evolution_api_url', settings.evolution_api_url),
       saveSetting('evolution_api_key', settings.evolution_api_key),
       saveSetting('evolution_instance', settings.evolution_instance),
+      saveSetting('mp_environment', settings.mp_environment),
+      saveSetting('mp_public_key', settings.mp_public_key),
+      saveSetting('mp_access_token', settings.mp_access_token),
+      saveSetting('mp_device_id', settings.mp_device_id),
     ])
     setSaving(false)
     setSaved(true)
@@ -206,6 +264,116 @@ export function ConfiguracoesManagement() {
             <p className="text-xs text-muted-foreground">
               Quando configurada, um código de 4 dígitos é enviado via WhatsApp ao cadastrar clientes para validar o celular.
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Mercado Pago Point */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-primary" />
+                <CardTitle className="text-base">Mercado Pago — Maquininha Point</CardTitle>
+              </div>
+              <Badge variant={settings.mp_environment === 'test' ? 'secondary' : 'default'} className="text-xs">
+                {settings.mp_environment === 'test' ? 'Ambiente de Teste' : 'Produção'}
+              </Badge>
+            </div>
+            <CardDescription>Validação de pagamentos efetuados pela maquininha Point (Brasil)</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Ambiente</Label>
+              <Select
+                value={settings.mp_environment}
+                onValueChange={(v) => setSettings((s) => ({ ...s, mp_environment: v }))}
+              >
+                <SelectTrigger className="w-52">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="test">Teste (sandbox)</SelectItem>
+                  <SelectItem value="production">Produção</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Public Key</Label>
+              <Input
+                value={settings.mp_public_key}
+                onChange={(e) => setSettings((s) => ({ ...s, mp_public_key: e.target.value }))}
+                placeholder="APP_USR-..."
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Access Token</Label>
+              <div className="relative">
+                <Input
+                  type={showMpToken ? 'text' : 'password'}
+                  value={settings.mp_access_token}
+                  onChange={(e) => setSettings((s) => ({ ...s, mp_access_token: e.target.value }))}
+                  placeholder="APP_USR-..."
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowMpToken((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showMpToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Maquininha */}
+            <div className="space-y-1.5">
+              <Label>Maquininha Point</Label>
+              <div className="flex gap-2">
+                <Select
+                  value={settings.mp_device_id}
+                  onValueChange={(v) => setSettings((s) => ({ ...s, mp_device_id: v }))}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder={mpDevices.length === 0 ? 'Busque as maquininhas vinculadas...' : 'Selecionar maquininha...'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mpDevices.length === 0 && (
+                      <SelectItem value="__none__" disabled>Nenhuma maquininha encontrada</SelectItem>
+                    )}
+                    {mpDevices.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.id} {d.operating_mode === 'PDV' ? '(modo PDV)' : '(standalone)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" onClick={handleMpLoadDevices} disabled={mpLoadingDevices}>
+                  {mpLoadingDevices ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                A maquininha precisa estar logada na conta Mercado Pago e vinculada via aplicativo para aparecer aqui.
+              </p>
+            </div>
+
+            {/* Testar conexão */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button type="button" variant="outline" onClick={handleMpTest} disabled={mpTesting}>
+                {mpTesting ? (
+                  <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Testando...</>
+                ) : (
+                  'Testar conexão'
+                )}
+              </Button>
+              {mpStatus && (
+                <span className={`flex items-center gap-1.5 text-sm font-medium ${mpStatus.ok ? 'text-green-600' : 'text-destructive'}`}>
+                  {mpStatus.ok ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                  {mpStatus.message}
+                </span>
+              )}
+            </div>
           </CardContent>
         </Card>
 
