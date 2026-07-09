@@ -1,28 +1,41 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
+import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
-  Plus, Search, Pencil, Trash2, Phone, BriefcaseBusiness, CalendarDays,
+  Plus, Search, Pencil, Trash2, Phone, BriefcaseBusiness, CalendarDays, DollarSign,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import {
   FreelancerFormModal, applyCpfMask, applyCnpjMask, applyPhoneMask,
 } from './FreelancerFormModal'
-import type { Freelancer } from '@/types/database'
+import type { Freelancer, FinancialEntry } from '@/types/database'
 
 function formatDate(dateStr: string) {
   const [y, m, d] = dateStr.split('-')
   return `${d}/${m}/${y}`
 }
 
+// Próxima segunda-feira (estritamente futura: se hoje é segunda, retorna a da semana seguinte)
+function nextMondayStr(): string {
+  const d = new Date()
+  const days = ((1 - d.getDay() + 7) % 7) || 7
+  d.setDate(d.getDate() + days)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function FreelancersManagement() {
   const queryClient = useQueryClient()
+  const { profile } = useAuth()
+  const { toast } = useToast()
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editFreelancer, setEditFreelancer] = useState<Freelancer | null>(null)
+  const [launchingId, setLaunchingId] = useState<string | null>(null)
 
   const { data: freelancers = [], isLoading } = useQuery({
     queryKey: ['freelancers'],
@@ -54,6 +67,73 @@ export function FreelancersManagement() {
   function openEdit(f: Freelancer) {
     setEditFreelancer(f)
     setShowForm(true)
+  }
+
+  // Lança a diária do freelancer em Pagamentos, para a próxima segunda-feira.
+  // Se já existir lançamento para essa segunda, soma ao valor e registra no histórico.
+  async function lancarDiaria(f: Freelancer) {
+    const rate = Number(f.daily_rate)
+    if (rate <= 0) {
+      toast({ title: 'Diária não definida', description: `Defina o valor da diária de ${f.name} antes de lançar.`, variant: 'destructive' })
+      return
+    }
+    const monday = nextMondayStr()
+    if (!confirm(`Lançar diária de ${formatCurrency(rate)} para ${f.name}?\n\nPagamento programado para segunda-feira, ${formatDate(monday)}.`)) return
+
+    setLaunchingId(f.id)
+    try {
+      const { data: existing } = await supabase
+        .from('financial_entries')
+        .select('*')
+        .eq('type', 'payment')
+        .eq('beneficiary_type', 'freelancer')
+        .eq('beneficiary_id', f.id)
+        .eq('entry_date', monday)
+        .maybeSingle()
+
+      const historyItem = {
+        at: new Date().toISOString(),
+        by: profile?.name ?? 'Usuário',
+        amount: rate,
+      }
+
+      let total = rate
+      if (existing) {
+        const entry = existing as FinancialEntry
+        total = Number(entry.amount) + rate
+        const { error } = await supabase
+          .from('financial_entries')
+          .update({
+            amount: total,
+            history: [...(entry.history ?? []), historyItem],
+          })
+          .eq('id', entry.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('financial_entries').insert({
+          type: 'payment',
+          description: `Diárias — ${f.name}`,
+          amount: rate,
+          entry_date: monday,
+          beneficiary_type: 'freelancer',
+          beneficiary_id: f.id,
+          beneficiary_name: f.name,
+          attachments: [],
+          history: [historyItem],
+        })
+        if (error) throw error
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['financial-entries', 'payment'] })
+      toast({
+        title: 'Diária lançada!',
+        description: `${f.name} — total acumulado de ${formatCurrency(total)} para segunda, ${formatDate(monday)}.`,
+      })
+    } catch {
+      toast({ title: 'Erro ao lançar diária', description: 'Tente novamente.', variant: 'destructive' })
+    } finally {
+      setLaunchingId(null)
+    }
   }
 
   return (
@@ -147,6 +227,16 @@ export function FreelancersManagement() {
 
               {/* Ações */}
               <div className="flex gap-1.5 shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-green-600 hover:text-green-700 border-green-200 hover:bg-green-50"
+                  title="Lançar diária em Pagamentos (próxima segunda-feira)"
+                  onClick={() => lancarDiaria(f)}
+                  disabled={launchingId === f.id}
+                >
+                  <DollarSign className="w-3.5 h-3.5" />
+                </Button>
                 <Button size="sm" variant="outline" title="Editar" onClick={() => openEdit(f)}>
                   <Pencil className="w-3.5 h-3.5" />
                 </Button>

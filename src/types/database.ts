@@ -165,6 +165,12 @@ export interface FinancialAttachment {
   path: string
 }
 
+export interface FinancialHistoryItem {
+  at: string      // timestamp do lançamento
+  by: string      // nome de quem lançou
+  amount: number  // valor lançado
+}
+
 export interface FinancialEntry {
   id: string
   type: FinancialEntryType
@@ -176,6 +182,7 @@ export interface FinancialEntry {
   beneficiary_type: BeneficiaryType | null
   beneficiary_id: string | null
   beneficiary_name: string | null
+  history: FinancialHistoryItem[]
   created_at: string
 }
 

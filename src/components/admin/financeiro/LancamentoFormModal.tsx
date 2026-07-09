@@ -10,7 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Paperclip, X, Loader2, FileText, Image as ImageIcon, FileSpreadsheet, File } from 'lucide-react'
+import { Paperclip, X, Loader2, FileText, Image as ImageIcon, FileSpreadsheet, File, History } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
 import { supabase } from '@/integrations/supabase/client'
 import type {
   BeneficiaryType, FinancialAttachment, FinancialEntry, FinancialEntryType,
@@ -317,6 +318,31 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
               </button>
             )}
           </div>
+
+          {/* Histórico de lançamentos (somente leitura) */}
+          {entry && entry.history && entry.history.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                <History className="w-3.5 h-3.5" />
+                Histórico de lançamentos
+                <span className="text-muted-foreground text-xs font-normal">({entry.history.length})</span>
+              </Label>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto rounded-lg border p-2 bg-muted/30">
+                {[...entry.history].reverse().map((h, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 text-xs px-2 py-1.5 rounded bg-background border">
+                    <div className="min-w-0">
+                      <p className="font-medium">
+                        {new Date(h.at).toLocaleDateString('pt-BR')} às{' '}
+                        {new Date(h.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      <p className="text-muted-foreground truncate">por {h.by}</p>
+                    </div>
+                    <span className="font-semibold shrink-0">{formatCurrency(Number(h.amount))}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

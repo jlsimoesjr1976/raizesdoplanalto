@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Plus, Search, Pencil, Trash2, Paperclip, CalendarDays,
-  ArrowDownCircle, ArrowUpCircle, Wallet, CalendarRange, CalendarClock, User,
+  ArrowDownCircle, ArrowUpCircle, Wallet, CalendarRange, CalendarClock, User, History,
 } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import { LancamentoFormModal } from './LancamentoFormModal'
@@ -188,6 +188,12 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
                     <span className="flex items-center gap-1">
                       <Paperclip className="w-3 h-3" />
                       {e.attachments.length} anexo{e.attachments.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {e.history?.length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <History className="w-3 h-3" />
+                      {e.history.length} lançamento{e.history.length !== 1 ? 's' : ''}
                     </span>
                   )}
                   {e.notes && <span className="truncate max-w-52">{e.notes}</span>}
