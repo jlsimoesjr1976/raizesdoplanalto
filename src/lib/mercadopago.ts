@@ -47,8 +47,22 @@ async function mpFetch<T>(
   if (error) {
     return { ok: false, error: `Erro na ponte com o Mercado Pago: ${error.message}` }
   }
-  if (data?.error) return { ok: false, error: String(data.error) }
+  if (data?.error) return { ok: false, error: friendlyError(String(data.error)) }
   return { ok: true, data: data as T }
+}
+
+/** Traduz mensagens técnicas do Mercado Pago para orientações claras */
+function friendlyError(msg: string): string {
+  if (/already a queued intent/i.test(msg)) {
+    return 'Já existe uma cobrança pendente nesta maquininha. Finalize ou cancele a operação atual no visor antes de enviar outra.'
+  }
+  if (/device and site configuration not found/i.test(msg)) {
+    return 'A maquininha não está pronta. Verifique se ela está ligada, conectada à internet e no modo integrado (PDV).'
+  }
+  if (/not allowed to perform this action/i.test(msg)) {
+    return 'Esta maquininha não é compatível com o modo integrado (PDV). Use uma Point Smart ou Point Pro 2.'
+  }
+  return msg
 }
 
 /** Testa a conexão com a API (retorna o apelido da conta) */

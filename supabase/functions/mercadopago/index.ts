@@ -77,9 +77,24 @@ Deno.serve(async (req) => {
       body: body ? JSON.stringify(body) : undefined,
     })
 
-    const mpBody = await mpRes.text()
-    return new Response(mpBody, {
-      status: mpRes.status,
+    const mpText = await mpRes.text()
+    let mpBody: unknown = null
+    try { mpBody = JSON.parse(mpText) } catch { mpBody = mpText }
+
+    // Sempre responde 200 ao cliente; se o Mercado Pago retornou erro,
+    // repassa a mensagem no campo "error" para a UI exibir de forma legível.
+    if (!mpRes.ok) {
+      const message = (mpBody && typeof mpBody === 'object' && 'message' in mpBody)
+        ? (mpBody as { message: string }).message
+        : `Erro ${mpRes.status} na API do Mercado Pago`
+      return new Response(JSON.stringify({ error: message, mp_status: mpRes.status }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    return new Response(JSON.stringify(mpBody), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
