@@ -7,11 +7,12 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import {
   CheckCircle2, CreditCard, Banknote, Smartphone,
-  Plus, Trash2, CircleDollarSign, Users,
+  Plus, Trash2, CircleDollarSign, Users, Lock,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/integrations/supabase/client'
+import { PointChargeDialog } from './PointChargeDialog'
 import type { Order } from '@/types/database'
 
 type PaymentMethod = 'cash' | 'debit' | 'credit' | 'pix'
@@ -27,6 +28,9 @@ interface PaymentEntry {
   id: number
   method: PaymentMethod
   amount: string
+  // Cobrança via maquininha (débito/crédito)
+  mpConfirmed?: boolean
+  mpPaymentId?: string
 }
 
 interface Props {
@@ -44,18 +48,23 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
   const [payments, setPayments] = useState<PaymentEntry[]>([{ id: nextId++, method: 'pix', amount: '' }])
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [mpEnabled, setMpEnabled] = useState(false)
+  const [chargeEntryId, setChargeEntryId] = useState<number | null>(null)
 
   useEffect(() => {
     if (open) {
       Promise.all([
         supabase.from('settings').select('value').eq('key', 'service_charge_percent').single(),
         supabase.from('settings').select('value').eq('key', 'service_charge_enabled').single(),
-      ]).then(([{ data: pct }, { data: enabled }]) => {
+        supabase.from('settings').select('value').eq('key', 'mp_device_id').single(),
+      ]).then(([{ data: pct }, { data: enabled }, { data: device }]) => {
         if (pct) setServicePercent(Number(pct.value))
         setIncludeService(enabled ? enabled.value !== false && enabled.value !== 'false' : true)
+        setMpEnabled(!!String(device?.value ?? '').replace(/^"|"$/g, ''))
       })
       setPayments([{ id: nextId++, method: 'pix', amount: '' }])
       setSuccess(false)
+      setChargeEntryId(null)
     }
   }, [open])
 
@@ -71,8 +80,15 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
   }, 0)
   const remaining = Math.max(0, grandTotal - totalPaid)
   const overpaid = totalPaid > grandTotal ? totalPaid - grandTotal : 0
+
+  // Cartão (débito/crédito) com valor, mas ainda não cobrado na maquininha
+  const pendingCardCharge = mpEnabled && payments.some((p) => {
+    const v = parseFloat(p.amount.replace(',', '.'))
+    return (p.method === 'debit' || p.method === 'credit') && v > 0 && !p.mpConfirmed
+  })
+
   // Regra: se o total devido for 0,00, sempre permitir fechar e liberar a mesa
-  const isComplete = totalPaid >= grandTotal
+  const isComplete = totalPaid >= grandTotal && !pendingCardCharge
 
   function addPayment() {
     setPayments((prev) => [...prev, { id: nextId++, method: 'pix', amount: '' }])
@@ -83,13 +99,20 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
   }
 
   function updateMethod(id: number, method: PaymentMethod) {
-    setPayments((prev) => prev.map((p) => p.id === id ? { ...p, method } : p))
+    // Trocar de método invalida uma cobrança já confirmada na maquininha
+    setPayments((prev) => prev.map((p) => p.id === id ? { ...p, method, mpConfirmed: false, mpPaymentId: undefined } : p))
   }
 
   function updateAmount(id: number, amount: string) {
     // Permite apenas números e vírgula/ponto
     const cleaned = amount.replace(/[^0-9.,]/g, '')
-    setPayments((prev) => prev.map((p) => p.id === id ? { ...p, amount: cleaned } : p))
+    setPayments((prev) => prev.map((p) => p.id === id ? { ...p, amount: cleaned, mpConfirmed: false, mpPaymentId: undefined } : p))
+  }
+
+  const chargeEntry = payments.find((p) => p.id === chargeEntryId) ?? null
+
+  function handleChargeApproved(entryId: number, paymentId?: string) {
+    setPayments((prev) => prev.map((p) => p.id === entryId ? { ...p, mpConfirmed: true, mpPaymentId: paymentId } : p))
   }
 
   function fillRemaining(id: number) {
@@ -106,9 +129,14 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
     if (!order || !isComplete) return
     setLoading(true)
 
+    const mpPaymentIds = payments
+      .filter((p) => p.mpConfirmed && p.mpPaymentId)
+      .map((p) => p.mpPaymentId as string)
+
     await supabase.from('orders').update({
       status: 'paid',
       closed_at: new Date().toISOString(),
+      mp_payment_ids: mpPaymentIds,
     }).eq('id', order.id)
 
     if (order.table_id) {
@@ -228,15 +256,18 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
                           className="pl-9"
                           placeholder="0,00"
                           inputMode="decimal"
+                          disabled={payment.mpConfirmed}
                         />
                       </div>
-                      <button
-                        onClick={() => fillRemaining(payment.id)}
-                        className="text-xs text-primary hover:underline shrink-0 whitespace-nowrap"
-                        title="Preencher com valor restante"
-                      >
-                        <CircleDollarSign className="w-4 h-4" />
-                      </button>
+                      {!payment.mpConfirmed && (
+                        <button
+                          onClick={() => fillRemaining(payment.id)}
+                          className="text-xs text-primary hover:underline shrink-0 whitespace-nowrap"
+                          title="Preencher com valor restante"
+                        >
+                          <CircleDollarSign className="w-4 h-4" />
+                        </button>
+                      )}
                       {payments.length > 1 && (
                         <button
                           onClick={() => removePayment(payment.id)}
@@ -246,6 +277,31 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
                         </button>
                       )}
                     </div>
+
+                    {/* Cobrança na maquininha (débito/crédito) */}
+                    {mpEnabled && (payment.method === 'debit' || payment.method === 'credit') && (
+                      payment.mpConfirmed ? (
+                        <div className="flex items-center gap-1.5 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Pago na maquininha
+                          {payment.mpPaymentId && <span className="text-muted-foreground">· #{payment.mpPaymentId}</span>}
+                          <Lock className="w-3 h-3 ml-auto" />
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="w-full border-primary/40 text-primary hover:bg-primary/5"
+                          disabled={!parseFloat(payment.amount.replace(',', '.'))}
+                          onClick={() => setChargeEntryId(payment.id)}
+                        >
+                          <CreditCard className="w-3.5 h-3.5 mr-1.5" />
+                          Cobrar na maquininha
+                        </Button>
+                      )
+                    )}
+
                     {idx === 0 && payments.length === 1 && (
                       <p className="text-xs text-muted-foreground">
                         Clique em <CircleDollarSign className="w-3 h-3 inline" /> para preencher o valor total automaticamente
@@ -286,21 +342,39 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
             </div>
 
             {/* Rodapé */}
-            <div className="px-6 py-4 border-t flex gap-2">
-              <Button variant="outline" onClick={onClose} disabled={loading} className="flex-1">
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleConfirm}
-                disabled={!isComplete || loading}
-                className="flex-1 bg-green-600 hover:bg-green-700"
-              >
-                {loading ? 'Fechando...' : 'Confirmar Pagamento'}
-              </Button>
+            <div className="px-6 py-4 border-t space-y-2">
+              {pendingCardCharge && (
+                <p className="text-xs text-amber-700 flex items-center gap-1.5">
+                  <CreditCard className="w-3.5 h-3.5" />
+                  Efetue a cobrança do cartão na maquininha antes de confirmar.
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={onClose} disabled={loading} className="flex-1">
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleConfirm}
+                  disabled={!isComplete || loading}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                >
+                  {loading ? 'Fechando...' : 'Confirmar Pagamento'}
+                </Button>
+              </div>
             </div>
           </div>
         )}
       </DialogContent>
+
+      {chargeEntry && (
+        <PointChargeDialog
+          open={chargeEntryId !== null}
+          amount={parseFloat(chargeEntry.amount.replace(',', '.')) || 0}
+          description={`Mesa ${order.table_number} — Raízes do Planalto`}
+          onClose={() => setChargeEntryId(null)}
+          onApproved={(result) => handleChargeApproved(chargeEntry.id, result.paymentId)}
+        />
+      )}
     </Dialog>
   )
 }

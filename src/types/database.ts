@@ -93,6 +93,7 @@ export interface Order {
   customer_phone: string | null
   notes: string | null
   total: number
+  mp_payment_ids: string[]
   created_at: string
   closed_at: string | null
   tables?: Table
