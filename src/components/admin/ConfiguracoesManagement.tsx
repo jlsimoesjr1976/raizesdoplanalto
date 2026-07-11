@@ -22,6 +22,7 @@ interface Settings {
   mp_public_key: string
   mp_access_token: string
   mp_device_id: string
+  mp_point_enabled: boolean
 }
 
 const DEFAULTS: Settings = {
@@ -35,6 +36,7 @@ const DEFAULTS: Settings = {
   mp_public_key: '',
   mp_access_token: '',
   mp_device_id: '',
+  mp_point_enabled: false,
 }
 
 async function loadSetting(key: string) {
@@ -62,7 +64,7 @@ export function ConfiguracoesManagement() {
 
   useEffect(() => {
     async function load() {
-      const [name, percent, enabled, evoUrl, evoKey, evoInst, mpEnv, mpPk, mpToken, mpDevice] = await Promise.all([
+      const [name, percent, enabled, evoUrl, evoKey, evoInst, mpEnv, mpPk, mpToken, mpDevice, mpPoint] = await Promise.all([
         loadSetting('restaurant_name'),
         loadSetting('service_charge_percent'),
         loadSetting('service_charge_enabled'),
@@ -73,6 +75,7 @@ export function ConfiguracoesManagement() {
         loadSetting('mp_public_key'),
         loadSetting('mp_access_token'),
         loadSetting('mp_device_id'),
+        loadSetting('mp_point_enabled'),
       ])
       const str = (v: unknown) => (v as string ?? '').replace(/^"|"$/g, '')
       setSettings({
@@ -86,6 +89,7 @@ export function ConfiguracoesManagement() {
         mp_public_key: str(mpPk),
         mp_access_token: str(mpToken),
         mp_device_id: str(mpDevice),
+        mp_point_enabled: mpPoint === true,
       })
       setLoading(false)
     }
@@ -133,6 +137,7 @@ export function ConfiguracoesManagement() {
       saveSetting('mp_public_key', settings.mp_public_key),
       saveSetting('mp_access_token', settings.mp_access_token),
       saveSetting('mp_device_id', settings.mp_device_id),
+      saveSetting('mp_point_enabled', settings.mp_point_enabled),
     ])
     setSaving(false)
     setSaved(true)
@@ -282,6 +287,19 @@ export function ConfiguracoesManagement() {
             <CardDescription>Validação de pagamentos efetuados pela maquininha Point (Brasil)</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+              <div>
+                <p className="text-sm font-medium">Ativar cobrança na maquininha</p>
+                <p className="text-xs text-muted-foreground">
+                  Quando desligado, o fechamento de conta usa apenas a baixa manual
+                </p>
+              </div>
+              <Switch
+                checked={settings.mp_point_enabled}
+                onCheckedChange={(v) => setSettings((s) => ({ ...s, mp_point_enabled: v }))}
+              />
+            </div>
+
             <div className="space-y-1.5">
               <Label>Ambiente</Label>
               <Select

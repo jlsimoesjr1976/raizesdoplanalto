@@ -240,7 +240,7 @@ function MesaCard({ table, onOpen, onEdit, onDelete, onReserve, onFree }: MesaCa
       <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="p-1 rounded hover:bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button className="p-1.5 rounded-md bg-black/5 hover:bg-black/10 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
               <MoreVertical className="w-4 h-4" />
             </button>
           </DropdownMenuTrigger>
@@ -328,17 +328,17 @@ function MesaCard({ table, onOpen, onEdit, onDelete, onReserve, onFree }: MesaCa
         {/* CTA */}
         <div className="mt-auto">
           {table.status === 'free' && (
-            <div className="text-xs text-center text-green-700 font-medium opacity-60 group-hover:opacity-100 transition-opacity">
+            <div className="text-xs text-center text-green-700 font-medium opacity-100 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity">
               Clique para abrir
             </div>
           )}
           {table.status === 'occupied' && (
-            <div className="text-xs text-center text-amber-700 font-medium opacity-60 group-hover:opacity-100 transition-opacity">
+            <div className="text-xs text-center text-amber-700 font-medium opacity-100 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity">
               Ver pedido →
             </div>
           )}
           {table.status === 'reserved' && (
-            <div className="text-xs text-center text-blue-700 font-medium opacity-60 group-hover:opacity-100 transition-opacity">
+            <div className="text-xs text-center text-blue-700 font-medium opacity-100 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity">
               Reservada
             </div>
           )}

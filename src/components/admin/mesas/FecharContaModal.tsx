@@ -57,10 +57,13 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
         supabase.from('settings').select('value').eq('key', 'service_charge_percent').single(),
         supabase.from('settings').select('value').eq('key', 'service_charge_enabled').single(),
         supabase.from('settings').select('value').eq('key', 'mp_device_id').single(),
-      ]).then(([{ data: pct }, { data: enabled }, { data: device }]) => {
+        supabase.from('settings').select('value').eq('key', 'mp_point_enabled').single(),
+      ]).then(([{ data: pct }, { data: enabled }, { data: device }, { data: pointOn }]) => {
         if (pct) setServicePercent(Number(pct.value))
         setIncludeService(enabled ? enabled.value !== false && enabled.value !== 'false' : true)
-        setMpEnabled(!!String(device?.value ?? '').replace(/^"|"$/g, ''))
+        const hasDevice = !!String(device?.value ?? '').replace(/^"|"$/g, '')
+        const pointEnabled = pointOn?.value === true
+        setMpEnabled(hasDevice && pointEnabled)
       })
       setPayments([{ id: nextId++, method: 'pix', amount: '' }])
       setSuccess(false)
