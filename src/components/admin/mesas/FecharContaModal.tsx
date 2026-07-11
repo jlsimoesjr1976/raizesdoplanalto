@@ -42,6 +42,11 @@ interface Props {
 
 let nextId = 1
 
+// Formata um valor numérico para o campo de pagamento (ex: 12.5 -> "12,50")
+function fmtAmount(v: number): string {
+  return v > 0 ? v.toFixed(2).replace('.', ',') : ''
+}
+
 export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
   const [servicePercent, setServicePercent] = useState(10)
   const [includeService, setIncludeService] = useState(true)
@@ -59,11 +64,17 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
         supabase.from('settings').select('value').eq('key', 'mp_device_id').single(),
         supabase.from('settings').select('value').eq('key', 'mp_point_enabled').single(),
       ]).then(([{ data: pct }, { data: enabled }, { data: device }, { data: pointOn }]) => {
-        if (pct) setServicePercent(Number(pct.value))
-        setIncludeService(enabled ? enabled.value !== false && enabled.value !== 'false' : true)
+        const pctVal = pct ? Number(pct.value) : 10
+        const incl = enabled ? enabled.value !== false && enabled.value !== 'false' : true
+        setServicePercent(pctVal)
+        setIncludeService(incl)
         const hasDevice = !!String(device?.value ?? '').replace(/^"|"$/g, '')
         const pointEnabled = pointOn?.value === true
         setMpEnabled(hasDevice && pointEnabled)
+        // Pré-preenche a primeira forma de pagamento com o total a pagar
+        const sub = order?.total ?? 0
+        const gt = sub + (incl ? sub * (pctVal / 100) : 0)
+        setPayments([{ id: nextId++, method: 'pix', amount: fmtAmount(gt) }])
       })
       setPayments([{ id: nextId++, method: 'pix', amount: '' }])
       setSuccess(false)
@@ -94,7 +105,23 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
   const isComplete = totalPaid >= grandTotal && !pendingCardCharge
 
   function addPayment() {
-    setPayments((prev) => [...prev, { id: nextId++, method: 'pix', amount: '' }])
+    // Nova forma já vem com o saldo restante (que pode ser alterado)
+    const othersPaid = payments.reduce((sum, p) => {
+      const v = parseFloat(p.amount.replace(',', '.'))
+      return sum + (isNaN(v) ? 0 : v)
+    }, 0)
+    const rem = Math.max(0, grandTotal - othersPaid)
+    setPayments((prev) => [...prev, { id: nextId++, method: 'pix', amount: fmtAmount(rem) }])
+  }
+
+  // Alterna a taxa de serviço e, se houver uma única forma, reajusta ao novo total
+  function handleServiceToggle(v: boolean) {
+    setIncludeService(v)
+    const newTotal = subtotal + (v ? subtotal * (servicePercent / 100) : 0)
+    setPayments((prev) => prev.length === 1
+      ? [{ ...prev[0], amount: fmtAmount(newTotal), mpConfirmed: false, mpPaymentId: undefined }]
+      : prev
+    )
   }
 
   function removePayment(id: number) {
@@ -193,7 +220,7 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
                   </div>
                   <Switch
                     checked={includeService}
-                    onCheckedChange={setIncludeService}
+                    onCheckedChange={handleServiceToggle}
                   />
                 </div>
 
