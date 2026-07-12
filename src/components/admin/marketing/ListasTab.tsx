@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
 import {
@@ -10,8 +10,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Plus, Search, Pencil, Trash2, Users, Send, Loader2, CheckCircle2, Megaphone,
+  ImagePlus, X,
 } from 'lucide-react'
-import { sendWhatsAppRaw } from '@/lib/evolution'
+import { sendWhatsAppRaw, sendWhatsAppMedia } from '@/lib/evolution'
 import type { BroadcastList, Customer } from '@/types/database'
 
 function customerDigits(c: Customer): string {
@@ -114,10 +115,29 @@ function EnviarModal({ open, lista, customers, onClose }: {
   const [sending, setSending] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0, fail: 0 })
   const [finished, setFinished] = useState(false)
+  const [image, setImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>('')
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (open) { setMessage(''); setSending(false); setProgress({ done: 0, total: 0, fail: 0 }); setFinished(false) }
+    if (open) {
+      setMessage(''); setSending(false); setProgress({ done: 0, total: 0, fail: 0 }); setFinished(false)
+      setImage(null); setImagePreview('')
+    }
   }, [open])
+
+  function handleImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImage(file)
+    setImagePreview(URL.createObjectURL(file))
+  }
+
+  function removeImage() {
+    setImage(null)
+    setImagePreview('')
+    if (fileRef.current) fileRef.current.value = ''
+  }
 
   const members = useMemo(() => {
     if (!lista) return []
@@ -126,14 +146,35 @@ function EnviarModal({ open, lista, customers, onClose }: {
   }, [lista, customers])
 
   async function handleSend() {
-    if (!message.trim() || members.length === 0) return
+    if ((!message.trim() && !image) || members.length === 0) return
     setSending(true)
     setProgress({ done: 0, total: members.length, fail: 0 })
+
+    // Se houver imagem, faz upload uma vez e reutiliza a URL pública
+    let mediaUrl = ''
+    if (image) {
+      const path = `${crypto.randomUUID()}-${image.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
+      const { error: upErr } = await supabase.storage.from('marketing-media').upload(path, image)
+      if (upErr) {
+        setSending(false)
+        alert('Erro ao enviar a imagem: ' + upErr.message)
+        return
+      }
+      mediaUrl = supabase.storage.from('marketing-media').getPublicUrl(path).data.publicUrl
+    }
+
     let fail = 0
     for (let i = 0; i < members.length; i++) {
       const digits = customerDigits(members[i])
       const personalized = message.replace(/\{nome\}/gi, members[i].name.split(' ')[0])
-      const res = await sendWhatsAppRaw(digits, personalized)
+      const res = image
+        ? await sendWhatsAppMedia(digits, {
+            media: mediaUrl,
+            mimetype: image.type || 'image/jpeg',
+            fileName: image.name,
+            caption: personalized,
+          })
+        : await sendWhatsAppRaw(digits, personalized)
       if (!res.ok) fail++
       setProgress({ done: i + 1, total: members.length, fail })
       await new Promise((r) => setTimeout(r, 800)) // evita flood
@@ -166,15 +207,40 @@ function EnviarModal({ open, lista, customers, onClose }: {
               {members.length} destinatário{members.length !== 1 ? 's' : ''} com celular cadastrado.
             </p>
             <div className="space-y-1.5">
-              <Label>Mensagem</Label>
+              <Label>Mensagem {image && <span className="text-muted-foreground font-normal text-xs">(legenda da imagem)</span>}</Label>
               <Textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                rows={5}
+                rows={4}
                 placeholder="Olá {nome}! Temos uma novidade para você..."
                 disabled={sending}
               />
               <p className="text-xs text-muted-foreground">Use <code>{'{nome}'}</code> para inserir o primeiro nome do cliente.</p>
+            </div>
+
+            {/* Imagem */}
+            <div className="space-y-1.5">
+              <Label>Imagem <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
+              {imagePreview ? (
+                <div className="relative w-full rounded-lg overflow-hidden border bg-muted">
+                  <img src={imagePreview} alt="Prévia" className="w-full max-h-48 object-contain" />
+                  {!sending && (
+                    <button type="button" onClick={removeImage} className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1 hover:bg-black/80">
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={sending}
+                  className="w-full h-16 rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors text-sm disabled:opacity-50"
+                >
+                  <ImagePlus className="w-4 h-4" /> Anexar imagem
+                </button>
+              )}
             </div>
 
             {sending && (
@@ -188,7 +254,7 @@ function EnviarModal({ open, lista, customers, onClose }: {
 
             <DialogFooter>
               <Button variant="outline" onClick={onClose} disabled={sending}>Cancelar</Button>
-              <Button onClick={handleSend} disabled={sending || !message.trim() || members.length === 0}>
+              <Button onClick={handleSend} disabled={sending || (!message.trim() && !image) || members.length === 0}>
                 {sending ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Enviando...</> : <><Send className="w-4 h-4 mr-1.5" />Enviar agora</>}
               </Button>
             </DialogFooter>

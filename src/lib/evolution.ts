@@ -239,6 +239,36 @@ export async function sendWhatsAppRaw(numberDigits: string, text: string): Promi
   }
 }
 
+/** Envia uma mídia (imagem) via URL pública, com legenda opcional */
+export async function sendWhatsAppMedia(
+  numberDigits: string,
+  opts: { media: string; mimetype: string; fileName: string; caption?: string; mediatype?: 'image' | 'video' | 'document' }
+): Promise<{ ok: boolean; error?: string }> {
+  const config = await getConfig()
+  if (!config) return { ok: false, error: 'Evolution API não configurada.' }
+  try {
+    const res = await fetch(`${baseUrl(config)}/message/sendMedia/${config.instance}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: config.apiKey },
+      body: JSON.stringify({
+        number: numberDigits,
+        mediatype: opts.mediatype ?? 'image',
+        mimetype: opts.mimetype,
+        media: opts.media,
+        fileName: opts.fileName,
+        caption: opts.caption ?? '',
+      }),
+    })
+    if (!res.ok) {
+      const body = await res.text()
+      return { ok: false, error: `Erro ${res.status}: ${body.slice(0, 120)}` }
+    }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Erro de conexão' }
+  }
+}
+
 /** Chave normalizada de telefone p/ casar com o cadastro (DDD + 8 últimos dígitos) */
 export function phoneKey(raw: string): string {
   let d = (raw || '').replace(/\D/g, '')
