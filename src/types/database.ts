@@ -214,6 +214,13 @@ export interface FinancialEntry {
 
 export type SettlementMethod = 'pix' | 'boleto' | 'credito' | 'debito' | 'dinheiro'
 
+export interface BroadcastList {
+  id: string
+  name: string
+  member_ids: string[]
+  created_at: string
+}
+
 export interface MarketingCampaign {
   id: string
   name: string

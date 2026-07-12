@@ -32,6 +32,7 @@ import { FreelancersManagement } from '@/components/admin/freelancers/Freelancer
 import { FinanceiroManagement } from '@/components/admin/financeiro/FinanceiroManagement'
 import { FornecedoresManagement } from '@/components/admin/fornecedores/FornecedoresManagement'
 import { FuncionariosManagement } from '@/components/admin/funcionarios/FuncionariosManagement'
+import { MarketingManagement } from '@/components/admin/marketing/MarketingManagement'
 import { DashboardOverview } from '@/components/admin/DashboardOverview'
 
 type Tab =
@@ -124,6 +125,7 @@ export default function AdminDashboard() {
     if (activeTab === 'suppliers') return <FornecedoresManagement />
     if (activeTab === 'employees') return <FuncionariosManagement />
     if (activeTab === 'finance') return <FinanceiroManagement />
+    if (activeTab === 'marketing') return <MarketingManagement />
     if (activeTab === 'settings') return <ConfiguracoesManagement />
     return <PlaceholderTab icon={activeItem.icon} label={activeItem.label} />
   }

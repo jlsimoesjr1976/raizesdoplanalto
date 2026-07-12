@@ -38,9 +38,10 @@ interface Props {
   onSaved: (customer: Customer) => void
   customer?: Customer | null
   initialName?: string
+  initialPhone?: string
 }
 
-export function ClienteFormModal({ open, onClose, onSaved, customer, initialName = '' }: Props) {
+export function ClienteFormModal({ open, onClose, onSaved, customer, initialName = '', initialPhone = '' }: Props) {
   const { role } = useAuth()
   const isAdmin = role === 'admin'
   const [skipValidation, setSkipValidation] = useState(false)
@@ -70,11 +71,14 @@ export function ClienteFormModal({ open, onClose, onSaved, customer, initialName
       } else {
         setName(initialName)
         setDdi('+55')
-        setPhone('')
+        // Prefill do número (WhatsApp): remove DDI 55 e aplica máscara
+        let d = initialPhone.replace(/\D/g, '')
+        if (d.startsWith('55') && d.length >= 12) d = d.slice(2)
+        setPhone(d ? applyPhoneMask(d) : '')
         setBirthday('')
       }
     }
-  }, [open, customer, initialName])
+  }, [open, customer, initialName, initialPhone])
 
   async function handleSendCode(e: FormEvent) {
     e.preventDefault()
