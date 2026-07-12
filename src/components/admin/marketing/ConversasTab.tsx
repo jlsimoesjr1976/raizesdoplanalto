@@ -9,7 +9,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
-  fetchChats, fetchConversationMessages, sendWhatsAppRaw, sendWhatsAppMedia, phoneKey,
+  fetchChats, fetchConversationMessages, fetchLatestStoredByJid,
+  sendWhatsAppRaw, sendWhatsAppMedia, phoneKey,
   type WhatsAppChat, type WhatsAppMessage,
 } from '@/lib/evolution'
 import { ClienteFormModal } from '@/components/admin/clientes/ClienteFormModal'
@@ -56,8 +57,11 @@ export function ConversasTab() {
   const [prefillPhone, setPrefillPhone] = useState('')
   const [chatImage, setChatImage] = useState<File | null>(null)
   const [chatImagePreview, setChatImagePreview] = useState('')
+  const [unread, setUnread] = useState<Set<string>>(new Set())
   const chatFileRef = useRef<HTMLInputElement>(null)
   const msgEndRef = useRef<HTMLDivElement>(null)
+  const selectedRef = useRef<WhatsAppChat | null>(null)
+  selectedRef.current = selected
 
   // Clientes para casar número → nome
   const { data: customers = [], refetch: refetchCustomers } = useQuery({
@@ -81,15 +85,51 @@ export function ConversasTab() {
   async function loadChats() {
     setLoadingChats(true)
     setError('')
-    const res = await fetchChats()
-    if (!res.ok) setError(res.error ?? 'Erro ao carregar conversas')
-    else setChats(res.chats)
+    const [res, latest] = await Promise.all([fetchChats(), fetchLatestStoredByJid()])
+    if (!res.ok) {
+      setError(res.error ?? 'Erro ao carregar conversas')
+    } else {
+      // Enriquece a prévia com a última mensagem capturada pelo webhook (recebidas)
+      const chats = res.chats
+        .map((c) => {
+          const st = latest.get(c.jid)
+          return st && st.timestamp > c.timestamp
+            ? { ...c, lastText: st.text, lastFromMe: st.fromMe, timestamp: st.timestamp }
+            : c
+        })
+        .sort((a, b) => b.timestamp - a.timestamp)
+      setChats(chats)
+    }
     setLoadingChats(false)
   }
 
   useEffect(() => { loadChats() }, [])
 
+  // Realtime global: qualquer mensagem recebida atualiza a prévia e marca não lida
+  useEffect(() => {
+    const channel = supabase
+      .channel('wa-inbox')
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'whatsapp_messages',
+      }, (payload) => {
+        const r = payload.new as { jid: string; from_me: boolean; text: string; ts: number }
+        setChats((prev) => {
+          const idx = prev.findIndex((c) => c.jid === r.jid)
+          if (idx === -1) return prev
+          const updated = { ...prev[idx], lastText: r.text ?? '', lastFromMe: !!r.from_me, timestamp: Number(r.ts) }
+          const rest = prev.filter((_, i) => i !== idx)
+          return [updated, ...rest]
+        })
+        if (!r.from_me && selectedRef.current?.jid !== r.jid) {
+          setUnread((prev) => new Set(prev).add(r.jid))
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
   async function openChat(chat: WhatsAppChat) {
+    setUnread((prev) => { const n = new Set(prev); n.delete(chat.jid); return n })
     if (selected?.jid === chat.jid) return
     setSelected(chat)
     setMessages([])
@@ -218,6 +258,7 @@ export function ConversasTab() {
             const hasName = !!(cust?.name || c.pushName)
             const label = cust?.name || c.pushName || fmtPhone(c.phone)
             const active = selected?.jid === c.jid
+            const isUnread = unread.has(c.jid)
             return (
               <button
                 key={c.jid}
@@ -225,7 +266,8 @@ export function ConversasTab() {
                 onDoubleClick={() => openChat(c)}
                 className={cn(
                   'w-full text-left px-3 py-2.5 border-b flex gap-3 items-center hover:bg-muted/50 transition-colors',
-                  active && 'bg-muted'
+                  active && 'bg-muted',
+                  isUnread && !active && 'bg-green-50'
                 )}
               >
                 <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
@@ -233,17 +275,17 @@ export function ConversasTab() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-medium text-sm truncate">{label}</span>
+                    <span className={cn('text-sm truncate', isUnread ? 'font-bold' : 'font-medium')}>{label}</span>
                     {cust && <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />}
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">
+                  <p className={cn('text-xs truncate', isUnread ? 'text-foreground font-medium' : 'text-muted-foreground')}>
                     {c.lastFromMe ? 'Você: ' : ''}{c.lastText}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <span className="text-[10px] text-muted-foreground">{fmtTime(c.timestamp)}</span>
-                  {c.unread > 0 && (
-                    <span className="bg-green-500 text-white text-[10px] rounded-full min-w-4 h-4 px-1 flex items-center justify-center">{c.unread}</span>
+                  {isUnread && (
+                    <span className="w-2.5 h-2.5 rounded-full bg-green-500" title="Nova mensagem" />
                   )}
                 </div>
               </button>

@@ -234,6 +234,22 @@ export async function fetchStoredMessages(jid: string): Promise<WhatsAppMessage[
   }))
 }
 
+/** Última mensagem capturada (webhook) por conversa — para a prévia da lista */
+export async function fetchLatestStoredByJid(): Promise<Map<string, { text: string; fromMe: boolean; timestamp: number }>> {
+  const { data } = await supabase
+    .from('whatsapp_messages')
+    .select('jid, from_me, text, ts')
+    .order('ts', { ascending: false })
+    .limit(1000)
+  const map = new Map<string, { text: string; fromMe: boolean; timestamp: number }>()
+  for (const r of data ?? []) {
+    if (!map.has(r.jid as string)) {
+      map.set(r.jid as string, { text: (r.text as string) ?? '', fromMe: !!r.from_me, timestamp: Number(r.ts) })
+    }
+  }
+  return map
+}
+
 /** Mescla histórico da Evolution (enviadas) com o webhook (recebidas/novas) */
 export async function fetchConversationMessages(jid: string): Promise<{ ok: boolean; messages: WhatsAppMessage[] }> {
   const [evo, stored] = await Promise.all([fetchMessages(jid), fetchStoredMessages(jid)])
