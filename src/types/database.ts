@@ -149,7 +149,7 @@ export interface ContractData {
   horaInicio: string
   horaFim: string
   valor: string
-  formaPagamento: string
+  formaPagamento?: string
   avisoPrevio: string
   dataAssinatura: string
   pixKey?: string

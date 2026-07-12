@@ -38,7 +38,6 @@ export function GerarContratoModal({ open, freelancer, onClose, onSaved }: Props
   const [horaInicio, setHoraInicio] = useState('18:00')
   const [horaFim, setHoraFim] = useState('23:00')
   const [valor, setValor] = useState('')
-  const [formaPagamento, setFormaPagamento] = useState('término do evento, via PIX')
   const [avisoPrevio, setAvisoPrevio] = useState('24')
   const [dataAssinatura, setDataAssinatura] = useState('')
   const [pixKey, setPixKey] = useState('')
@@ -59,7 +58,6 @@ export function GerarContratoModal({ open, freelancer, onClose, onSaved }: Props
     setHoraInicio(saved?.horaInicio || '18:00')
     setHoraFim(saved?.horaFim || '23:00')
     setValor(saved?.valor || (freelancer ? Number(freelancer.daily_rate).toFixed(2).replace('.', ',') : ''))
-    setFormaPagamento(saved?.formaPagamento ?? 'término do evento, via PIX')
     setAvisoPrevio(saved?.avisoPrevio ?? '24')
     setPixKey(saved?.pixKey || freelancer?.pix_key || '')
     setMeiRazao('')
@@ -130,7 +128,6 @@ export function GerarContratoModal({ open, freelancer, onClose, onSaved }: Props
         horaInicio,
         horaFim,
         valor: valor.trim(),
-        formaPagamento: formaPagamento.trim(),
         avisoPrevio: avisoPrevio.trim() || '24',
         dataAssinatura: dataAssinatura.trim() || todayBR(),
       })
@@ -147,7 +144,6 @@ export function GerarContratoModal({ open, freelancer, onClose, onSaved }: Props
         horaInicio,
         horaFim,
         valor: valor.trim(),
-        formaPagamento: formaPagamento.trim(),
         avisoPrevio: avisoPrevio.trim(),
         dataAssinatura: dataAssinatura.trim(),
         pixKey: pixKey.trim(),
@@ -247,18 +243,17 @@ export function GerarContratoModal({ open, freelancer, onClose, onSaved }: Props
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Forma de pagamento</Label>
-                <Input value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)} placeholder="Ex: término do evento" />
-              </div>
-              <div className="space-y-1.5">
                 <Label>Chave Pix</Label>
                 <Input value={pixKey} onChange={(e) => setPixKey(e.target.value)} placeholder="CPF, celular, e-mail..." />
               </div>
+              <div className="space-y-1.5">
+                <Label>Data de assinatura</Label>
+                <Input value={dataAssinatura} onChange={(e) => setDataAssinatura(e.target.value)} placeholder="DD/MM/AAAA" />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Data de assinatura</Label>
-              <Input value={dataAssinatura} onChange={(e) => setDataAssinatura(e.target.value)} placeholder="DD/MM/AAAA" />
-            </div>
+            <p className="text-xs text-muted-foreground -mt-1">
+              O pagamento é padronizado no contrato: via PIX no dia útil seguinte à prestação dos serviços.
+            </p>
 
             <p className="text-xs text-muted-foreground">
               O PDF será baixado para assinatura digital no <span className="font-medium">gov.br</span>. Depois, use o botão “Anexos” do card para enviar o contrato assinado.

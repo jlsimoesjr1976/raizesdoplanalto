@@ -25,9 +25,8 @@ export interface ContratoData {
   data: string
   horaInicio: string
   horaFim: string
-  // Pagamento
+  // Valor
   valor: string       // ex: "180,00"
-  formaPagamento: string
   // Rescisão
   avisoPrevio: string // ex: "24"
   // Assinatura
@@ -45,8 +44,8 @@ export function gerarContratoPdf(contratante: ContratanteData, c: ContratoData):
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const usableWidth = pageWidth - marginX * 2
-  const LH = 4.2          // altura de linha de parágrafo
-  const PARA_GAP = 1.8    // espaço após parágrafo
+  const LH = 4.2
+  const PARA_GAP = 1.8
   let y = marginTop
 
   function ensureSpace(needed: number) {
@@ -58,7 +57,7 @@ export function gerarContratoPdf(contratante: ContratanteData, c: ContratoData):
 
   function title(text: string) {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(12.5)
+    doc.setFontSize(12)
     const lines = doc.splitTextToSize(text, usableWidth)
     doc.text(lines, pageWidth / 2, y, { align: 'center' })
     y += lines.length * 5.5 + 3
@@ -84,7 +83,7 @@ export function gerarContratoPdf(contratante: ContratanteData, c: ContratoData):
 
   const comarca = (contratante.cidadeUf.split(' - ')[0] || 'Brasília').trim()
 
-  title('CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE FREELANCER')
+  title('Contrato de Prestação Eventual de Serviços Autônomos para Evento Específico')
   y += 1
 
   paragraph(
@@ -102,41 +101,45 @@ export function gerarContratoPdf(contratante: ContratanteData, c: ContratoData):
   }
 
   heading('CLÁUSULA PRIMEIRA – DO OBJETO')
-  paragraph(
-    `O presente contrato tem por objeto a prestação de serviços por parte do(a) CONTRATADO(A) na função de ${c.funcao}, para atuar durante eventos ou dias de pico de movimento da CONTRATANTE.`
-  )
+  paragraph('O presente contrato tem por objeto a prestação eventual, autônoma e sem vínculo empregatício de serviços de apoio operacional em bar/bartender, exclusivamente para o evento ou dia de movimento específico indicado neste instrumento, sem garantia de continuidade, habitualidade, exclusividade ou convocação futura.')
+  paragraph('O(A) CONTRATADO(A) atuará com autonomia técnica na execução dos serviços contratados, observadas apenas as normas gerais de segurança, higiene, atendimento ao público e funcionamento do estabelecimento, sem subordinação jurídica, controle de jornada ou inserção na estrutura permanente da CONTRATANTE.')
 
-  heading('CLÁUSULA SEGUNDA – DA EXECUÇÃO DOS SERVIÇOS E PRAZO')
-  paragraph(`2.1. Os serviços serão prestados na data de ${c.data}, das ${c.horaInicio} às ${c.horaFim}.`)
-  paragraph('2.2. O local de prestação dos serviços será no estabelecimento da CONTRATANTE, localizado no endereço citado acima.')
-  paragraph('2.3. O(A) CONTRATADO(A) compromete-se a executar os serviços com zelo, cordialidade e seguindo as normas de higiene, vestimenta e atendimento do estabelecimento.')
+  heading('CLÁUSULA SEGUNDA – DA EXECUÇÃO DOS SERVIÇOS')
+  paragraph(`2.1. Os serviços serão prestados no dia ${c.data}, durante o período estimado das ${c.horaInicio} às ${c.horaFim}, exclusivamente em razão da demanda pontual do evento/data específica.`)
+  paragraph('2.2. O período acima não caracteriza jornada de trabalho, controle de ponto ou escala fixa, tratando-se apenas da janela operacional necessária para a realização do serviço contratado.')
+  paragraph('2.3. O(A) CONTRATADO(A) declara possuir experiência, capacidade técnica e autonomia para a execução dos serviços, responsabilizando-se pela forma de execução, conduta profissional e qualidade do serviço prestado.')
+  paragraph('2.4. A presente contratação não gera obrigação de convocação futura pela CONTRATANTE, nem obrigação de aceitação de novas demandas pelo(a) CONTRATADO(A).')
 
-  heading('CLÁUSULA TERCEIRA – DO VALOR E DA FORMA DE PAGAMENTO')
-  paragraph(`3.1. Pelos serviços prestados, a CONTRATANTE pagará ao(à) CONTRATADO(A) o valor total de R$ ${fmtValor(c.valor)} por diária/evento.`)
-  paragraph(`3.2. O pagamento será realizado no ${c.formaPagamento}, mediante a assinatura de recibo ou confirmação de quitação.`)
-  if (c.pixKey && c.pixKey.trim()) {
-    paragraph(`3.3. Fica estabelecido que o pagamento será efetuado por meio de transferência PIX para a chave ${c.pixKey.trim()}, de titularidade do(a) CONTRATADO(A).`)
-  }
+  heading('CLÁUSULA TERCEIRA – DO VALOR, PAGAMENTO E QUITAÇÃO')
+  paragraph(`3.1. Pela prestação dos serviços autônomos descritos neste instrumento, a CONTRATANTE pagará ao(à) CONTRATADO(A) o valor total de R$ ${fmtValor(c.valor)} pela diária/evento.`)
+  paragraph(`3.2. O pagamento será realizado via PIX${c.pixKey && c.pixKey.trim() ? `, para a chave ${c.pixKey.trim()},` : ''} no dia útil seguinte à prestação dos serviços, mediante recibo ou confirmação eletrônica de quitação.`)
+  paragraph('3.3. O valor contratado remunera integralmente os serviços prestados no evento/data específica, não possuindo natureza salarial e não gerando férias, 13º salário, FGTS, aviso prévio, horas extras, adicional noturno, DSR ou qualquer verba típica de relação empregatícia.')
+  paragraph('3.4. O(A) CONTRATADO(A) será responsável por seus próprios tributos, contribuições, encargos e obrigações fiscais eventualmente incidentes sobre os valores recebidos.')
 
-  heading('CLÁUSULA QUARTA – DAS DISPOSIÇÕES GERAIS')
-  paragraph('Fica pactuada a total inexistência de vínculo trabalhista entre as partes, não havendo entre o FREELANCER e CONTRATANTE qualquer tipo de relação de subordinação.')
-  paragraph('A contratação do freelancer, cumpridas todas as formalidades legais, com ou sem exclusividade, de forma contínua ou não, afasta a qualidade de empregado prevista no art. 3º da CLT, nos termos do art. 442-B da CLT.')
-  paragraph('A tolerância, por qualquer das partes, com relação ao descumprimento de qualquer termo ou condições aqui ajustadas, não será considerada como desistência em exigir o cumprimento de disposição nele contida, nem representará novação com relação a obrigação passada, presente ou futura, no tocante ao termo ou condição cujo descumprimento foi tolerado.')
+  heading('CLÁUSULA QUARTA – DA NATUREZA AUTÔNOMA DA CONTRATAÇÃO')
+  paragraph('4.1. As partes reconhecem que a presente contratação possui natureza civil/autônoma, eventual e específica, inexistindo relação de emprego entre CONTRATANTE e CONTRATADO(A).')
+  paragraph('4.2. Não haverá subordinação jurídica, controle de jornada, exclusividade, habitualidade obrigatória, salário mensal, dependência econômica presumida ou integração do(a) CONTRATADO(A) ao quadro permanente da CONTRATANTE.')
+  paragraph('4.3. O(A) CONTRATADO(A) poderá prestar serviços a terceiros, inclusive no mesmo ramo de atividade, inexistindo qualquer obrigação de exclusividade.')
+  paragraph('4.4. A eventual contratação do(a) CONTRATADO(A) em outras datas dependerá de novo ajuste entre as partes, verbal ou escrito, sempre para demandas específicas e pontuais, não caracterizando continuidade obrigatória ou vínculo empregatício.')
 
-  heading('CLÁUSULA QUINTA – DAS OBRIGAÇÕES DO FREELANCER')
-  paragraph('O freelancer, por seus prepostos ou terceirizados, atuará estritamente para o cumprimento dos serviços solicitados pela CONTRATANTE, sendo vedada a comercialização ou utilização para outros fins.')
-  paragraph('Será de responsabilidade do freelancer todo o ônus trabalhista ou tributário referente aos serviços, bem como aos terceirizados utilizados para a prestação do serviço objeto deste instrumento, ficando a CONTRATANTE isenta de qualquer obrigação em relação a eles.')
-  paragraph('O freelancer é responsável pelo pagamento dos impostos e contribuições fiscais que possam recair sobre o serviço objeto do presente instrumento.')
+  heading('CLÁUSULA QUINTA – DA POSSIBILIDADE DE SUBSTITUIÇÃO')
+  paragraph('O(A) CONTRATADO(A) poderá indicar profissional substituto para a execução dos serviços, desde que informe previamente a CONTRATANTE e que o substituto possua qualificação compatível, documentação regular e aceite as normas mínimas de higiene, segurança e atendimento do estabelecimento.')
+  paragraph('A aprovação prévia do substituto pela CONTRATANTE terá finalidade exclusivamente operacional, sanitária e de segurança, não caracterizando pessoalidade típica de relação empregatícia.')
 
-  heading('CLÁUSULA SEXTA – DA CESSÃO DE DIREITOS AUTORAIS')
-  paragraph('Pelo presente contrato, o FREELANCER cede em favor do CONTRATANTE, com exclusividade, a totalidade dos direitos autorais de todo o trabalho desenvolvido em razão do presente contrato, podendo o CONTRATANTE editar, transformar, revender, replicar e alterar.')
-  paragraph('O FREELANCER declara ser titular originário e exclusivo dos trabalhos entregues.')
+  heading('CLÁUSULA SEXTA – DA RESPONSABILIDADE DO(A) CONTRATADO(A)')
+  paragraph('O(A) CONTRATADO(A) responderá por danos materiais causados por dolo, culpa grave, imprudência, negligência ou imperícia na execução dos serviços, incluindo danos a equipamentos, utensílios, bebidas, mercadorias, comandas, sistemas, clientes, colaboradores ou terceiros.')
+  paragraph('O(A) CONTRATADO(A) compromete-se a observar as normas de higiene, segurança alimentar, conduta profissional, cordialidade no atendimento, vedação ao consumo de bebidas alcoólicas durante a prestação dos serviços e zelo pelos bens da CONTRATANTE.')
 
-  heading('CLÁUSULA SÉTIMA – DO SIGILO E CONFIDENCIALIDADE')
-  paragraph('Os contratantes declaram expressamente manter sigilo, tanto escrito como verbal, ou por qualquer outra forma, de todos os dados, informações pessoais e profissionais relacionados ao presente contrato, não podendo revelar, reproduzir, utilizar ou dar conhecimento, em hipótese alguma, a terceiros, de dados ou informações obtidas por força deste contrato, sem a prévia autorização da outra parte.')
+  heading('CLÁUSULA SÉTIMA – DO USO DE IMAGEM, MONITORAMENTO E CONFIDENCIALIDADE')
+  paragraph('O(A) CONTRATADO(A) declara ciência de que o estabelecimento pode possuir câmeras de segurança, sistemas de controle operacional e registros internos destinados à segurança, conferência de operações e proteção patrimonial.')
+  paragraph('O(A) CONTRATADO(A) autoriza, de forma gratuita e limitada, o uso de sua imagem em registros incidentais de fotos e vídeos do evento, exclusivamente para divulgação institucional da CONTRATANTE em redes sociais, materiais promocionais e registros internos, sem finalidade ofensiva ou vexatória.')
+  paragraph('O(A) CONTRATADO(A) compromete-se a manter sigilo sobre informações comerciais, operacionais, receitas, fornecedores, clientes, estratégias, valores, dados internos e quaisquer informações obtidas em razão da prestação dos serviços.')
 
-  heading('CLÁUSULA OITAVA – DA RESCISÃO E AUSÊNCIA DE MULTA')
-  paragraph(`8.1. O presente contrato poderá ser rescindido ou cancelado por qualquer uma das partes, sem a incidência de multa rescisória, mediante aviso prévio de, no mínimo, ${c.avisoPrevio} horas de antecedência.`)
+  heading('CLÁUSULA OITAVA – DO CANCELAMENTO, AUSÊNCIA E RESCISÃO')
+  paragraph(`8.1. O presente contrato poderá ser cancelado por qualquer das partes, sem multa, mediante aviso prévio mínimo de ${c.avisoPrevio} horas.`)
+  paragraph('8.2. O não comparecimento injustificado do(a) CONTRATADO(A), sem aviso prévio, poderá gerar responsabilização por perdas e danos comprovadamente causados à CONTRATANTE, especialmente quando houver prejuízo operacional direto ao evento.')
+  paragraph('8.3. A CONTRATANTE poderá rescindir imediatamente a contratação, sem obrigação de pagamento integral, em caso de conduta inadequada, embriaguez, agressividade, furto, assédio, descumprimento grave de normas de higiene ou segurança, dano ao patrimônio ou atendimento incompatível com o padrão mínimo do estabelecimento.')
+  paragraph('8.4. Em caso de interrupção parcial dos serviços por culpa do(a) CONTRATADO(A), o pagamento poderá ser proporcional ao serviço efetivamente prestado, sem prejuízo da apuração de danos.')
 
   heading('CLÁUSULA NONA – DO FORO')
   paragraph(`Para dirimir quaisquer controvérsias oriundas do presente contrato, as partes elegem o foro da comarca de ${comarca}.`)
