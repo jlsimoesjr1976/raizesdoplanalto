@@ -63,6 +63,46 @@ export async function sendWhatsAppText(ddi: string, phone: string, text: string)
   }
 }
 
+/** Testa a conexão com a Evolution API e retorna o estado da instância */
+export async function testEvolutionConnection(
+  override?: EvolutionConfig
+): Promise<{ ok: boolean; state?: string; error?: string }> {
+  const config = override ?? await getConfig()
+  if (!config || !config.url || !config.apiKey || !config.instance) {
+    return { ok: false, error: 'Preencha URL, API Key e Nome da Instância.' }
+  }
+
+  const baseUrl = config.url.replace(/\/+$/, '')
+
+  try {
+    const res = await fetch(
+      `${baseUrl}/instance/connectionState/${config.instance}`,
+      { headers: { apikey: config.apiKey } }
+    )
+
+    if (res.status === 404) {
+      return { ok: false, error: `Instância "${config.instance}" não encontrada nesta API.` }
+    }
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, error: 'API Key inválida ou sem permissão.' }
+    }
+    if (!res.ok) {
+      const body = await res.text()
+      return { ok: false, error: `Erro ${res.status} — ${body.slice(0, 120)}` }
+    }
+
+    const j = await res.json()
+    const state = j?.instance?.state ?? j?.state ?? 'desconhecido'
+    return { ok: true, state }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Erro de conexão'
+    if (/failed to fetch/i.test(msg)) {
+      return { ok: false, error: 'Não foi possível alcançar a URL. Verifique o endereço e se a API permite acesso (CORS).' }
+    }
+    return { ok: false, error: msg }
+  }
+}
+
 /** Gera código numérico de 4 dígitos */
 export function generateVerificationCode(): string {
   return String(Math.floor(1000 + Math.random() * 9000))

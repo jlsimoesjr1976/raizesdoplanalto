@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { supabase } from '@/integrations/supabase/client'
 import { testConnection, listDevices, type PointDevice } from '@/lib/mercadopago'
+import { testEvolutionConnection } from '@/lib/evolution'
 import { fetchCnpj, applyCnpjMask, onlyDigits } from '@/lib/cnpj'
 
 interface Settings {
@@ -105,6 +106,10 @@ export function ConfiguracoesManagement() {
   const [cnpjLoading, setCnpjLoading] = useState(false)
   const [cnpjStatus, setCnpjStatus] = useState<{ ok: boolean; message: string } | null>(null)
 
+  // WhatsApp / Evolution
+  const [evoTesting, setEvoTesting] = useState(false)
+  const [evoStatus, setEvoStatus] = useState<{ ok: boolean; message: string } | null>(null)
+
   // Mercado Pago
   const [mpTesting, setMpTesting] = useState(false)
   const [mpStatus, setMpStatus] = useState<{ ok: boolean; message: string } | null>(null)
@@ -173,6 +178,28 @@ export function ConfiguracoesManagement() {
     setSettings((s) => ({ ...s, cnpj: masked }))
     setCnpjStatus(null)
     if (onlyDigits(masked).length === 14) handleCnpjLookup(masked)
+  }
+
+  async function handleEvoTest() {
+    setEvoTesting(true)
+    setEvoStatus(null)
+    const result = await testEvolutionConnection({
+      url: settings.evolution_api_url,
+      apiKey: settings.evolution_api_key,
+      instance: settings.evolution_instance,
+    })
+    if (!result.ok) {
+      setEvoStatus({ ok: false, message: result.error ?? 'Falha na conexão' })
+    } else if (result.state === 'open') {
+      setEvoStatus({ ok: true, message: 'Conectado ao WhatsApp e pronto para enviar mensagens.' })
+    } else if (result.state === 'connecting') {
+      setEvoStatus({ ok: false, message: 'Instância encontrada, mas aguardando leitura do QR Code no WhatsApp.' })
+    } else if (result.state === 'close') {
+      setEvoStatus({ ok: false, message: 'Instância desconectada. Escaneie o QR Code para conectar o WhatsApp.' })
+    } else {
+      setEvoStatus({ ok: true, message: `Conexão OK. Estado da instância: ${result.state}.` })
+    }
+    setEvoTesting(false)
   }
 
   async function handleMpTest() {
@@ -443,6 +470,20 @@ export function ConfiguracoesManagement() {
                 <p className="text-xs text-muted-foreground">
                   Quando configurada, um código de 4 dígitos é enviado via WhatsApp ao cadastrar clientes para validar o celular.
                 </p>
+
+                <Separator />
+
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Button type="button" variant="outline" onClick={handleEvoTest} disabled={evoTesting}>
+                    {evoTesting ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Testando...</> : 'Testar conexão'}
+                  </Button>
+                  {evoStatus && (
+                    <span className={`flex items-center gap-1.5 text-sm font-medium ${evoStatus.ok ? 'text-green-600' : 'text-destructive'}`}>
+                      {evoStatus.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
+                      {evoStatus.message}
+                    </span>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
