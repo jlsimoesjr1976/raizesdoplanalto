@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   Search, RefreshCw, Send, Loader2, MessageSquare, UserPlus, CheckCircle2, Phone,
+  ImagePlus, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
-  fetchChats, fetchMessages, sendWhatsAppRaw, phoneKey,
+  fetchChats, fetchMessages, sendWhatsAppRaw, sendWhatsAppMedia, phoneKey,
   type WhatsAppChat, type WhatsAppMessage,
 } from '@/lib/evolution'
 import { ClienteFormModal } from '@/components/admin/clientes/ClienteFormModal'
@@ -53,6 +54,9 @@ export function ConversasTab() {
   const [sending, setSending] = useState(false)
   const [showCadastro, setShowCadastro] = useState(false)
   const [prefillPhone, setPrefillPhone] = useState('')
+  const [chatImage, setChatImage] = useState<File | null>(null)
+  const [chatImagePreview, setChatImagePreview] = useState('')
+  const chatFileRef = useRef<HTMLInputElement>(null)
   const msgEndRef = useRef<HTMLDivElement>(null)
 
   // Clientes para casar número → nome
@@ -86,12 +90,28 @@ export function ConversasTab() {
   useEffect(() => { loadChats() }, [])
 
   async function openChat(chat: WhatsAppChat) {
+    if (selected?.jid === chat.jid) return
     setSelected(chat)
     setMessages([])
+    setReply('')
+    clearChatImage()
     setLoadingMsgs(true)
     const res = await fetchMessages(chat.jid)
     setMessages(res.ok ? res.messages : [])
     setLoadingMsgs(false)
+  }
+
+  function handleChatImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setChatImage(file)
+    setChatImagePreview(URL.createObjectURL(file))
+  }
+
+  function clearChatImage() {
+    setChatImage(null)
+    setChatImagePreview('')
+    if (chatFileRef.current) chatFileRef.current.value = ''
   }
 
   useEffect(() => {
@@ -99,14 +119,39 @@ export function ConversasTab() {
   }, [messages])
 
   async function handleSend() {
-    if (!selected || !reply.trim()) return
-    setSending(true)
+    if (!selected) return
     const text = reply.trim()
-    const res = await sendWhatsAppRaw(selected.phone, text)
+    if (!text && !chatImage) return
+    setSending(true)
+    setError('')
+
+    let res: { ok: boolean; error?: string }
+    let bubbleText = text
+    if (chatImage) {
+      const path = `${crypto.randomUUID()}-${chatImage.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
+      const { error: upErr } = await supabase.storage.from('marketing-media').upload(path, chatImage)
+      if (upErr) {
+        setSending(false)
+        setError('Erro ao enviar a imagem: ' + upErr.message)
+        return
+      }
+      const url = supabase.storage.from('marketing-media').getPublicUrl(path).data.publicUrl
+      res = await sendWhatsAppMedia(selected.phone, {
+        media: url,
+        mimetype: chatImage.type || 'image/jpeg',
+        fileName: chatImage.name,
+        caption: text,
+      })
+      bubbleText = text ? `📷 ${text}` : '📷 Imagem'
+    } else {
+      res = await sendWhatsAppRaw(selected.phone, text)
+    }
+
     setSending(false)
     if (res.ok) {
-      setMessages((prev) => [...prev, { id: `local-${Date.now()}`, fromMe: true, text, timestamp: Math.floor(Date.now() / 1000) }])
+      setMessages((prev) => [...prev, { id: `local-${Date.now()}`, fromMe: true, text: bubbleText, timestamp: Math.floor(Date.now() / 1000) }])
       setReply('')
+      clearChatImage()
     } else {
       setError(res.error ?? 'Erro ao enviar')
     }
@@ -159,6 +204,7 @@ export function ConversasTab() {
               <button
                 key={c.jid}
                 onClick={() => openChat(c)}
+                onDoubleClick={() => openChat(c)}
                 className={cn(
                   'w-full text-left px-3 py-2.5 border-b flex gap-3 items-center hover:bg-muted/50 transition-colors',
                   active && 'bg-muted'
@@ -248,17 +294,45 @@ export function ConversasTab() {
             </div>
 
             {/* Responder */}
-            <div className="p-3 border-t flex items-center gap-2">
-              <Input
-                value={reply}
-                onChange={(e) => setReply(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-                placeholder="Digite uma mensagem..."
-                disabled={sending}
-              />
-              <Button onClick={handleSend} disabled={sending || !reply.trim()}>
-                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              </Button>
+            <div className="border-t">
+              {/* Prévia da imagem */}
+              {chatImagePreview && (
+                <div className="px-3 pt-3">
+                  <div className="relative inline-block">
+                    <img src={chatImagePreview} alt="Prévia" className="max-h-28 rounded-lg border" />
+                    <button
+                      type="button"
+                      onClick={clearChatImage}
+                      className="absolute -top-2 -right-2 bg-black/70 text-white rounded-full p-0.5 hover:bg-black"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="p-3 flex items-center gap-2">
+                <input ref={chatFileRef} type="file" accept="image/*" className="hidden" onChange={handleChatImage} />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => chatFileRef.current?.click()}
+                  disabled={sending}
+                  title="Anexar imagem"
+                  className="shrink-0"
+                >
+                  <ImagePlus className="w-4 h-4" />
+                </Button>
+                <Input
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+                  placeholder={chatImage ? 'Legenda (opcional)...' : 'Digite uma mensagem...'}
+                  disabled={sending}
+                />
+                <Button onClick={handleSend} disabled={sending || (!reply.trim() && !chatImage)}>
+                  {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                </Button>
+              </div>
             </div>
           </>
         )}
