@@ -50,7 +50,14 @@ export function WhatsAppChatModal({ open, numberDigits, name, onClose }: Props) 
     if (!digits) return
     setLoading(true)
     const res = await fetchMessages(jid)
-    setMessages(res.ok ? res.messages : [])
+    if (res.ok) {
+      // Preserva mensagens enviadas agora (otimistas) que ainda não voltaram do servidor
+      setMessages((prev) => {
+        const serverMax = res.messages.length ? Math.max(...res.messages.map((m) => m.timestamp)) : 0
+        const pendentes = prev.filter((m) => m.id.startsWith('local-') && m.timestamp > serverMax)
+        return [...res.messages, ...pendentes]
+      })
+    }
     setLoading(false)
   }
 
@@ -99,6 +106,8 @@ export function WhatsAppChatModal({ open, numberDigits, name, onClose }: Props) 
     if (res.ok) {
       setMessages((prev) => [...prev, { id: `local-${Date.now()}`, fromMe: true, text: bubble, timestamp: Math.floor(Date.now() / 1000) }])
       setReply(''); clearImage()
+      // Sincroniza com o servidor após 2s para confirmar a mensagem
+      setTimeout(loadMessages, 2000)
     } else {
       setError(res.error ?? 'Erro ao enviar')
     }
