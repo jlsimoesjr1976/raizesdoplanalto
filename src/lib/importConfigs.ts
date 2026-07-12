@@ -20,6 +20,46 @@ function parseAtivo(v: string | number | null): boolean {
   return !['não', 'nao', 'n', 'false', '0', 'inativo'].includes(s)
 }
 
+function onlyDigits(v: string | number | null): string {
+  return v === null ? '' : String(v).replace(/\D/g, '')
+}
+
+function maskPhone(v: string | number | null): string {
+  const d = onlyDigits(v).slice(0, 11)
+  if (d.length <= 2) return d
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+}
+
+function parseBirthday(v: string | number | null): string | null {
+  const s = str(v)
+  if (!s) return null
+  let m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (m) return s
+  return null
+}
+
+/** Marca duplicatas por telefone (dígitos) — para clientes */
+async function flagDuplicatesByPhone(rows: ParsedRow[]): Promise<ParsedRow[]> {
+  const { data } = await supabase.from('customers').select('phone')
+  const existing = new Set(
+    (data ?? []).map((r: { phone: string | null }) => onlyDigits(r.phone)).filter(Boolean)
+  )
+  const seen = new Set<string>()
+  return rows.map((r) => {
+    const digits = onlyDigits(r.values.phone)
+    if (!digits) return r
+    const errors = [...r.errors]
+    if (existing.has(digits)) errors.push('Celular já cadastrado')
+    else if (seen.has(digits)) errors.push('Celular duplicado na planilha')
+    seen.add(digits)
+    return { ...r, errors }
+  })
+}
+
 /** Marca como erro as linhas cujo nome já existe (case-insensitive) */
 async function flagDuplicates(rows: ParsedRow[], table: string): Promise<ParsedRow[]> {
   const { data } = await supabase.from(table).select('name')
@@ -142,6 +182,44 @@ export const insumosImportConfig: ImportConfig = {
     })
 
     const { error } = await supabase.from('ingredients').insert(payload)
+    if (error) throw error
+    return payload.length
+  },
+}
+
+// ── Clientes ────────────────────────────────────────────────────────────────
+
+export const clientesImportConfig: ImportConfig = {
+  title: 'Importar Clientes',
+  templateFileName: 'modelo-clientes.xlsx',
+  sheetName: 'Clientes',
+  columns: [
+    { key: 'name', header: 'Nome *', required: true, type: 'text', example: 'João da Silva', width: 28, hint: 'nome completo do cliente' },
+    { key: 'ddi', header: 'DDI', type: 'text', example: '+55', width: 8, hint: 'código do país; padrão +55 (Brasil)' },
+    { key: 'phone', header: 'Celular', type: 'text', example: '(61) 99999-8888', width: 18, hint: 'com DDD; pode ter máscara ou só números' },
+    { key: 'birthday', header: 'Data de Nascimento', type: 'text', example: '15/03/1990', width: 20, hint: 'formato DD/MM/AAAA' },
+  ],
+  extraInstructions: [
+    'Os clientes importados ficam como NÃO verificados (sem validação por WhatsApp).',
+    'Quando o DDI não for informado, será usado +55 (Brasil).',
+    'A data de nascimento deve estar no formato DD/MM/AAAA (ex: 15/03/1990) — é opcional.',
+    'CLIENTES JÁ CADASTRADOS: linhas com celular já existente no sistema serão ignoradas.',
+  ],
+  prepareRows: (rows) => flagDuplicatesByPhone(rows),
+  importRows: async (rows) => {
+    const payload = rows.map((r) => {
+      let ddi = str(r.values.ddi) || '+55'
+      if (!ddi.startsWith('+')) ddi = '+' + ddi.replace(/\D/g, '')
+      const phoneMasked = maskPhone(r.values.phone)
+      return {
+        name: str(r.values.name)!,
+        phone_ddi: ddi,
+        phone: phoneMasked || null,
+        phone_verified: false,
+        birthday: parseBirthday(r.values.birthday),
+      }
+    })
+    const { error } = await supabase.from('customers').insert(payload)
     if (error) throw error
     return payload.length
   },

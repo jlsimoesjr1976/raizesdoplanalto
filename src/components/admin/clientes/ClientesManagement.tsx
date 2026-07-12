@@ -6,10 +6,12 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   Plus, Search, Pencil, Trash2, CheckCircle2, XCircle,
-  Phone, Cake, ShoppingBag, Users,
+  Phone, Cake, ShoppingBag, Users, FileSpreadsheet,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { ClienteFormModal } from './ClienteFormModal'
+import { ImportXlsxModal } from '@/components/admin/ImportXlsxModal'
+import { clientesImportConfig } from '@/lib/importConfigs'
 import type { Customer } from '@/types/database'
 
 interface CustomerWithStats extends Customer {
@@ -22,6 +24,7 @@ export function ClientesManagement() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editCustomer, setEditCustomer] = useState<Customer | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ['customers'],
@@ -100,10 +103,16 @@ export function ClientesManagement() {
           <h2 className="text-2xl font-bold">Clientes</h2>
           <p className="text-muted-foreground text-sm mt-0.5">{customers.length} cliente{customers.length !== 1 ? 's' : ''} cadastrado{customers.length !== 1 ? 's' : ''}</p>
         </div>
-        <Button onClick={() => { setEditCustomer(null); setShowForm(true) }}>
-          <Plus className="w-4 h-4 mr-2" />
-          Novo Cliente
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            Importar
+          </Button>
+          <Button onClick={() => { setEditCustomer(null); setShowForm(true) }}>
+            <Plus className="w-4 h-4 mr-2" />
+            Novo Cliente
+          </Button>
+        </div>
       </div>
 
       {/* Busca */}
@@ -207,6 +216,13 @@ export function ClientesManagement() {
         customer={editCustomer}
         onClose={() => { setShowForm(false); setEditCustomer(null) }}
         onSaved={reload}
+      />
+
+      <ImportXlsxModal
+        open={importOpen}
+        config={clientesImportConfig}
+        onClose={() => setImportOpen(false)}
+        onImported={reload}
       />
     </div>
   )
