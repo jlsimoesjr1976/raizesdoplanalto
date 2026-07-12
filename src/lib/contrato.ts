@@ -34,38 +34,49 @@ function fmtValor(v: string) {
 
 export function gerarContratoPdf(contratante: ContratanteData, c: ContratoData): jsPDF {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-  const marginX = 16
-  const marginTop = 12
+  const marginX = 18
+  const marginTop = 16
   const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
   const usableWidth = pageWidth - marginX * 2
-  // Espaçamentos compactos para caber em uma única página A4
-  const LH = 3.9          // altura de linha de parágrafo
-  const PARA_GAP = 1.4    // espaço após parágrafo
+  const LH = 4.2          // altura de linha de parágrafo
+  const PARA_GAP = 1.8    // espaço após parágrafo
   let y = marginTop
+
+  function ensureSpace(needed: number) {
+    if (y + needed > pageHeight - marginTop) {
+      doc.addPage()
+      y = marginTop
+    }
+  }
 
   function title(text: string) {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(12)
+    doc.setFontSize(12.5)
     const lines = doc.splitTextToSize(text, usableWidth)
     doc.text(lines, pageWidth / 2, y, { align: 'center' })
-    y += lines.length * 5 + 2
+    y += lines.length * 5.5 + 3
   }
 
   function heading(text: string) {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    y += 1.2
+    doc.setFontSize(9.5)
+    ensureSpace(10)
+    y += 2
     doc.text(text, marginX, y)
-    y += 4
+    y += 4.5
   }
 
-  function paragraph(text: string, opts: { bold?: boolean } = {}) {
-    doc.setFont('helvetica', opts.bold ? 'bold' : 'normal')
-    doc.setFontSize(8.7)
+  function paragraph(text: string) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9.5)
     const lines = doc.splitTextToSize(text, usableWidth)
+    ensureSpace(lines.length * LH + PARA_GAP)
     doc.text(lines, marginX, y, { align: 'justify', maxWidth: usableWidth })
     y += lines.length * LH + PARA_GAP
   }
+
+  const comarca = (contratante.cidadeUf.split(' - ')[0] || 'Brasília').trim()
 
   title('CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE FREELANCER')
   y += 1
@@ -91,19 +102,36 @@ export function gerarContratoPdf(contratante: ContratanteData, c: ContratoData):
   paragraph(`3.1. Pelos serviços prestados, a CONTRATANTE pagará ao(à) CONTRATADO(A) o valor total de R$ ${fmtValor(c.valor)} por diária/evento.`)
   paragraph(`3.2. O pagamento será realizado no ${c.formaPagamento}, mediante a assinatura de recibo ou confirmação de quitação.`)
 
-  heading('CLÁUSULA QUARTA – DA AUSÊNCIA DE VÍNCULO EMPREGATÍCIO')
-  paragraph('4.1. Este contrato é de natureza estritamente civil, não gerando qualquer tipo de vínculo empregatício (CLT) entre o(a) CONTRATADO(A) e a CONTRATANTE, ficando esta isenta de obrigações trabalhistas, previdenciárias ou sindicais.')
-  paragraph('4.2. O(A) CONTRATADO(A) possui total autonomia para aceitar ou recusar convites para dias futuros.')
+  heading('CLÁUSULA QUARTA – DAS DISPOSIÇÕES GERAIS')
+  paragraph('Fica pactuada a total inexistência de vínculo trabalhista entre as partes, não havendo entre o FREELANCER e CONTRATANTE qualquer tipo de relação de subordinação.')
+  paragraph('A contratação do freelancer, cumpridas todas as formalidades legais, com ou sem exclusividade, de forma contínua ou não, afasta a qualidade de empregado prevista no art. 3º da CLT, nos termos do art. 442-B da CLT.')
+  paragraph('A tolerância, por qualquer das partes, com relação ao descumprimento de qualquer termo ou condições aqui ajustadas, não será considerada como desistência em exigir o cumprimento de disposição nele contida, nem representará novação com relação a obrigação passada, presente ou futura, no tocante ao termo ou condição cujo descumprimento foi tolerado.')
 
-  heading('CLÁUSULA QUINTA – DA RESCISÃO E AUSÊNCIA DE MULTA')
-  paragraph(`5.1. O presente contrato poderá ser rescindido ou cancelado por qualquer uma das partes, sem a incidência de multa rescisória, mediante aviso prévio de, no mínimo, ${c.avisoPrevio} horas de antecedência.`)
+  heading('CLÁUSULA QUINTA – DAS OBRIGAÇÕES DO FREELANCER')
+  paragraph('O freelancer, por seus prepostos ou terceirizados, atuará estritamente para o cumprimento dos serviços solicitados pela CONTRATANTE, sendo vedada a comercialização ou utilização para outros fins.')
+  paragraph('Será de responsabilidade do freelancer todo o ônus trabalhista ou tributário referente aos serviços, bem como aos terceirizados utilizados para a prestação do serviço objeto deste instrumento, ficando a CONTRATANTE isenta de qualquer obrigação em relação a eles.')
+  paragraph('O freelancer é responsável pelo pagamento dos impostos e contribuições fiscais que possam recair sobre o serviço objeto do presente instrumento.')
 
-  y += 1
+  heading('CLÁUSULA SEXTA – DA CESSÃO DE DIREITOS AUTORAIS')
+  paragraph('Pelo presente contrato, o FREELANCER cede em favor do CONTRATANTE, com exclusividade, a totalidade dos direitos autorais de todo o trabalho desenvolvido em razão do presente contrato, podendo o CONTRATANTE editar, transformar, revender, replicar e alterar.')
+  paragraph('O FREELANCER declara ser titular originário e exclusivo dos trabalhos entregues.')
+
+  heading('CLÁUSULA SÉTIMA – DO SIGILO E CONFIDENCIALIDADE')
+  paragraph('Os contratantes declaram expressamente manter sigilo, tanto escrito como verbal, ou por qualquer outra forma, de todos os dados, informações pessoais e profissionais relacionados ao presente contrato, não podendo revelar, reproduzir, utilizar ou dar conhecimento, em hipótese alguma, a terceiros, de dados ou informações obtidas por força deste contrato, sem a prévia autorização da outra parte.')
+
+  heading('CLÁUSULA OITAVA – DA RESCISÃO E AUSÊNCIA DE MULTA')
+  paragraph(`8.1. O presente contrato poderá ser rescindido ou cancelado por qualquer uma das partes, sem a incidência de multa rescisória, mediante aviso prévio de, no mínimo, ${c.avisoPrevio} horas de antecedência.`)
+
+  heading('CLÁUSULA NONA – DO FORO')
+  paragraph(`Para dirimir quaisquer controvérsias oriundas do presente contrato, as partes elegem o foro da comarca de ${comarca}.`)
+
+  y += 2
   paragraph('E, por estarem assim justos e contratados, assinam o presente instrumento em duas vias de igual teor e forma.')
   paragraph(`${contratante.cidadeUf}, ${c.dataAssinatura}.`)
 
   // Bloco de assinaturas
-  y += 12
+  y += 14
+  ensureSpace(34)
   const colW = usableWidth / 2
   const line1X = marginX + colW / 2
   const line2X = marginX + colW + colW / 2
