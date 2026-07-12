@@ -85,10 +85,10 @@ export function MesasManagement() {
 
   async function handleDeleteTable(table: Table) {
     if (table.status !== 'free') {
-      alert('Só é possível excluir mesas que estejam livres.')
+      alert('Só é possível excluir comandas que estejam livres.')
       return
     }
-    if (!confirm(`Excluir Mesa ${table.number}?`)) return
+    if (!confirm(`Excluir Comanda ${table.number}?`)) return
     await supabase.from('tables').delete().eq('id', table.id)
     loadTables()
   }
@@ -129,14 +129,14 @@ export function MesasManagement() {
       {/* Cabeçalho */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Mesas</h2>
+          <h2 className="text-2xl font-bold">Comandas</h2>
           <p className="text-muted-foreground text-sm mt-0.5">
             {counts.occupied} ocupada{counts.occupied !== 1 ? 's' : ''} · {counts.free} livre{counts.free !== 1 ? 's' : ''} · {counts.reserved} reservada{counts.reserved !== 1 ? 's' : ''}
           </p>
         </div>
         <Button onClick={() => { setEditTable(null); setShowForm(true) }}>
           <Plus className="w-4 h-4 mr-2" />
-          Nova Mesa
+          Nova Comanda
         </Button>
       </div>
 
@@ -169,7 +169,7 @@ export function MesasManagement() {
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
           <Table2 className="w-14 h-14 opacity-30" />
-          <p>Nenhuma mesa encontrada</p>
+          <p>Nenhuma comanda encontrada</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -246,7 +246,7 @@ function MesaCard({ table, onOpen, onEdit, onDelete, onReserve, onFree }: MesaCa
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={onEdit}>
-              <Pencil className="w-4 h-4 mr-2" /> Editar mesa
+              <Pencil className="w-4 h-4 mr-2" /> Editar comanda
             </DropdownMenuItem>
             {table.status === 'free' && (
               <DropdownMenuItem onClick={onReserve}>
@@ -255,7 +255,7 @@ function MesaCard({ table, onOpen, onEdit, onDelete, onReserve, onFree }: MesaCa
             )}
             {table.status === 'reserved' && (
               <DropdownMenuItem onClick={onFree}>
-                <RotateCcw className="w-4 h-4 mr-2" /> Liberar mesa
+                <RotateCcw className="w-4 h-4 mr-2" /> Liberar comanda
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />

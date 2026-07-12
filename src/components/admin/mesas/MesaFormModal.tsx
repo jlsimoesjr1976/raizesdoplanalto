@@ -47,7 +47,7 @@ export function MesaFormModal({ open, onClose, onSaved, table, nextNumber = 1 }:
 
     setLoading(false)
     if (err) {
-      setError(err.code === '23505' ? `Mesa número ${num} já existe.` : err.message)
+      setError(err.code === '23505' ? `Comanda número ${num} já existe.` : err.message)
       return
     }
     onSaved()
@@ -58,11 +58,11 @@ export function MesaFormModal({ open, onClose, onSaved, table, nextNumber = 1 }:
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>{table ? 'Editar Mesa' : 'Nova Mesa'}</DialogTitle>
+          <DialogTitle>{table ? 'Editar Comanda' : 'Nova Comanda'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label>Número da Mesa *</Label>
+            <Label>Número da Comanda *</Label>
             <Input
               type="number"
               min={1}

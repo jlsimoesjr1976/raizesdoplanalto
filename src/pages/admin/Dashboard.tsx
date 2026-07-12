@@ -55,7 +55,7 @@ type NavItem = { id: Tab; label: string; icon: React.ElementType }
 const NAV_TOP: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'orders', label: 'Pedidos', icon: ClipboardList },
-  { id: 'tables', label: 'Mesas', icon: Table2 },
+  { id: 'tables', label: 'Comandas', icon: Table2 },
 ]
 
 // Submenus do grupo Cadastros

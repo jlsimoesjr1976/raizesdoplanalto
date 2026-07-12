@@ -13,6 +13,7 @@ import { formatCurrency } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { AdicionarItemModal } from './AdicionarItemModal'
 import { FecharContaModal } from './FecharContaModal'
+import { notifyItensLancados } from '@/lib/comandaNotify'
 import type { Order, OrderItem } from '@/types/database'
 
 const KITCHEN_STATUS_CONFIG = {
@@ -86,6 +87,16 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
       notes: i.notes || null,
     }))
     await supabase.from('order_items').insert(rows)
+
+    // Notifica o cliente pelo WhatsApp (itens lançados)
+    if (order?.customer_phone) {
+      notifyItensLancados(order.customer_phone, order.table_number ?? '', items.map((i) => ({
+        name: i.product.name,
+        quantity: i.quantity,
+        unitPrice: i.product.price,
+      })))
+    }
+
     await loadOrder()
   }
 
@@ -97,7 +108,7 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
   // Sem consumo (total 0,00): encerra a comanda e libera a mesa diretamente
   async function handleLiberarMesa() {
     if (!order) return
-    if (!confirm(`Liberar a Mesa ${order.table_number}? A comanda será encerrada sem consumo.`)) return
+    if (!confirm(`Liberar a Comanda ${order.table_number}? Será encerrada sem consumo.`)) return
     setLiberando(true)
     await supabase
       .from('orders')
@@ -137,7 +148,7 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
           <SheetHeader className="px-6 pt-6 pb-4 border-b space-y-3">
             <div className="flex items-center justify-between">
               <SheetTitle className="text-lg">
-                Mesa {order?.table_number ?? '—'}
+                Comanda {order?.table_number ?? '—'}
                 {(order as Order & { tables?: { name?: string } })?.tables?.name
                   ? ` — ${(order as Order & { tables?: { name?: string } })?.tables?.name}`
                   : ''}
@@ -293,7 +304,7 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
                     disabled={liberando}
                   >
                     <CheckCircle2 className="w-4 h-4 mr-1" />
-                    {liberando ? 'Liberando...' : 'Liberar Mesa'}
+                    {liberando ? 'Liberando...' : 'Liberar Comanda'}
                   </Button>
                 ) : (
                   <Button

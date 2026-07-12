@@ -13,6 +13,7 @@ import { formatCurrency } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/integrations/supabase/client'
 import { PointChargeDialog } from './PointChargeDialog'
+import { notifyPagamento } from '@/lib/comandaNotify'
 import type { Order } from '@/types/database'
 
 type PaymentMethod = 'cash' | 'debit' | 'credit' | 'pix'
@@ -173,6 +174,16 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
       await supabase.from('tables').update({ status: 'free' }).eq('id', order.table_id)
     }
 
+    // Notifica o cliente pelo WhatsApp (pagamento + comanda fechada)
+    if (order.customer_phone) {
+      const formas = payments
+        .map((p) => ({
+          label: PAYMENT_OPTIONS.find((o) => o.value === p.method)?.label ?? p.method,
+          amount: parseFloat(p.amount.replace(',', '.')) || 0,
+        }))
+      notifyPagamento(order.customer_phone, order.customer_name, order.table_number ?? '', formas, totalPaid)
+    }
+
     setLoading(false)
     setSuccess(true)
     setTimeout(() => {
@@ -190,14 +201,14 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
     <Dialog open={open} onOpenChange={(v) => !v && !loading && onClose()}>
       <DialogContent className="max-w-md max-h-[92vh] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <DialogTitle>Fechar Conta — Mesa {order.table_number}</DialogTitle>
+          <DialogTitle>Fechar Conta — Comanda {order.table_number}</DialogTitle>
         </DialogHeader>
 
         {success ? (
           <div className="flex flex-col items-center gap-3 py-12 px-6">
             <CheckCircle2 className="w-16 h-16 text-green-500" />
             <p className="font-semibold text-lg">Conta fechada!</p>
-            <p className="text-muted-foreground text-sm">Mesa liberada com sucesso.</p>
+            <p className="text-muted-foreground text-sm">Comanda liberada com sucesso.</p>
           </div>
         ) : (
           <div className="flex flex-col flex-1 overflow-hidden">
@@ -400,7 +411,7 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
         <PointChargeDialog
           open={chargeEntryId !== null}
           amount={parseFloat(chargeEntry.amount.replace(',', '.')) || 0}
-          description={`Mesa ${order.table_number} — Raízes do Planalto`}
+          description={`Comanda ${order.table_number} — Raízes do Planalto`}
           onClose={() => setChargeEntryId(null)}
           onApproved={(result) => handleChargeApproved(chargeEntry.id, result.paymentId)}
         />

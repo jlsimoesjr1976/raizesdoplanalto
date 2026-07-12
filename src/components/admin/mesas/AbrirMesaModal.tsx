@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
 import { ClienteCombobox } from '@/components/admin/clientes/ClienteCombobox'
 import { ClienteFormModal } from '@/components/admin/clientes/ClienteFormModal'
+import { notifyComandaAberta } from '@/lib/comandaNotify'
 import type { Table, Profile, Customer } from '@/types/database'
 
 interface Props {
@@ -55,7 +56,7 @@ export function AbrirMesaModal({ open, onClose, onOpened, table }: Props) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!table) return
-    if (!customer) { setError('Selecione o responsável pela mesa'); return }
+    if (!customer) { setError('Selecione o cliente responsável pela comanda'); return }
     if (!waiterId) { setError('Selecione o atendente responsável'); return }
     const count = parseInt(peopleCount)
     if (isNaN(count) || count < 1) { setError('Número de pessoas inválido'); return }
@@ -86,6 +87,11 @@ export function AbrirMesaModal({ open, onClose, onOpened, table }: Props) {
 
     await supabase.from('tables').update({ status: 'occupied' }).eq('id', table.id)
 
+    // Notifica o cliente pelo WhatsApp (comanda aberta)
+    if (customer.phone) {
+      notifyComandaAberta(`${customer.phone_ddi} ${customer.phone}`, customer.name, table.number)
+    }
+
     setLoading(false)
     onOpened(order.id)
     onClose()
@@ -99,14 +105,14 @@ export function AbrirMesaModal({ open, onClose, onOpened, table }: Props) {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-              Abrir Mesa {table.number}{table.name ? ` — ${table.name}` : ''}
+              Abrir Comanda {table.number}{table.name ? ` — ${table.name}` : ''}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 py-2">
 
-            {/* Responsável pela mesa — busca em clientes */}
+            {/* Responsável pelo cliente — busca em clientes */}
             <div className="space-y-1.5">
-              <Label>Responsável pela mesa *</Label>
+              <Label>Cliente responsável *</Label>
               <ClienteCombobox
                 value={customer}
                 onChange={setCustomer}
@@ -160,7 +166,7 @@ export function AbrirMesaModal({ open, onClose, onOpened, table }: Props) {
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
               <Button type="submit" disabled={loading}>
-                {loading ? 'Abrindo...' : 'Abrir Mesa'}
+                {loading ? 'Abrindo...' : 'Abrir Comanda'}
               </Button>
             </DialogFooter>
           </form>

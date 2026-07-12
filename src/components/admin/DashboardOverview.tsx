@@ -186,7 +186,7 @@ export function DashboardOverview() {
     },
     {
       id: 'tables' as const,
-      title: 'Mesas Ocupadas',
+      title: 'Comandas Abertas',
       value: `${occupied} / ${totalTables}`,
       icon: Table2,
       color: 'text-amber-600',
@@ -280,7 +280,7 @@ export function DashboardOverview() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
-                          Mesa {o.table_number ?? '—'}{o.customer_name ? ` · ${o.customer_name}` : ''}
+                          Comanda {o.table_number ?? '—'}{o.customer_name ? ` · ${o.customer_name}` : ''}
                         </p>
                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                           <Clock className="w-3 h-3" />
@@ -322,7 +322,7 @@ export function DashboardOverview() {
                       <Receipt className="w-4 h-4 text-green-600 shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
-                          Mesa {o.table_number ?? '—'}{o.customer_name ? ` · ${o.customer_name}` : ''}
+                          Comanda {o.table_number ?? '—'}{o.customer_name ? ` · ${o.customer_name}` : ''}
                         </p>
                         <p className="text-xs text-muted-foreground">{hora(o.created_at)}</p>
                       </div>
@@ -340,17 +340,17 @@ export function DashboardOverview() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Popup: Mesas Ocupadas ── */}
+      {/* ── Popup: Comandas Abertas ── */}
       <Dialog open={detail === 'tables'} onOpenChange={(v) => !v && setDetail(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Table2 className="w-5 h-5 text-amber-600" />
-              Mesas Ocupadas ({occupied} / {totalTables})
+              Comandas Abertas ({occupied} / {totalTables})
             </DialogTitle>
           </DialogHeader>
           {occupiedTables.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-6 text-center">Todas as mesas estão livres. 🎉</p>
+            <p className="text-sm text-muted-foreground py-6 text-center">Nenhuma comanda aberta. 🎉</p>
           ) : (
             <ScrollArea className="max-h-[55vh]">
               <div className="space-y-2 pr-2">
@@ -363,7 +363,7 @@ export function DashboardOverview() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate flex items-center gap-1.5">
-                          Mesa {t.number}{t.name ? ` — ${t.name}` : ''}
+                          Comanda {t.number}{t.name ? ` — ${t.name}` : ''}
                         </p>
                         {order?.customer_name && (
                           <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
@@ -413,7 +413,7 @@ export function DashboardOverview() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">
-                        Mesa {o.table_number ?? '—'}{o.customer_name ? ` · ${o.customer_name}` : ''}
+                        Comanda {o.table_number ?? '—'}{o.customer_name ? ` · ${o.customer_name}` : ''}
                       </p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3 h-3" />

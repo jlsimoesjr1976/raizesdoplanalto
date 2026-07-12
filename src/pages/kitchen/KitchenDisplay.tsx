@@ -119,7 +119,7 @@ function KitchenCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-2xl font-bold text-white">Mesa {item.tableNumber}</span>
+          <span className="text-2xl font-bold text-white">Comanda {item.tableNumber}</span>
           {isUrgent && <Flame className="w-4 h-4 text-red-400 shrink-0" />}
         </div>
         <Badge

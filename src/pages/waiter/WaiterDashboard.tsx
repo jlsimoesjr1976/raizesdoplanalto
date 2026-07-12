@@ -132,7 +132,7 @@ export default function WaiterDashboard() {
         {activeTab === 'mesas' && (
           <>
             <p className="text-xs text-muted-foreground mb-3">
-              Toque em uma mesa para abrir ou gerenciar
+              Toque em uma comanda para abrir ou gerenciar
             </p>
 
             {loading && (
@@ -146,7 +146,7 @@ export default function WaiterDashboard() {
             {!loading && tables.length === 0 && (
               <div className="flex flex-col items-center py-16 text-muted-foreground gap-2">
                 <Table2 className="w-10 h-10 opacity-30" />
-                <p className="text-sm">Nenhuma mesa cadastrada</p>
+                <p className="text-sm">Nenhuma comanda cadastrada</p>
               </div>
             )}
 
@@ -186,11 +186,11 @@ export default function WaiterDashboard() {
         {/* Aba Pedidos */}
         {activeTab === 'pedidos' && (
           <>
-            <p className="text-xs text-muted-foreground mb-3">Mesas com comanda aberta</p>
+            <p className="text-xs text-muted-foreground mb-3">Comandas abertas</p>
             {myTables.length === 0 ? (
               <div className="flex flex-col items-center py-16 text-muted-foreground gap-2">
                 <ClipboardList className="w-10 h-10 opacity-30" />
-                <p className="text-sm">Nenhuma mesa ocupada no momento</p>
+                <p className="text-sm">Nenhuma comanda aberta no momento</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -205,7 +205,7 @@ export default function WaiterDashboard() {
                         {table.number}
                       </div>
                       <div className="text-left">
-                        <p className="font-semibold text-sm">Mesa {table.number}{table.name ? ` — ${table.name}` : ''}</p>
+                        <p className="font-semibold text-sm">Comanda {table.number}{table.name ? ` — ${table.name}` : ''}</p>
                         <p className="text-xs text-muted-foreground">Toque para ver o pedido</p>
                       </div>
                     </div>
@@ -233,7 +233,7 @@ export default function WaiterDashboard() {
             )}
           >
             <Table2 className={cn('w-5 h-5', activeTab === 'mesas' && 'text-[hsl(145,60%,28%)]')} />
-            Mesas
+            Comandas
             {occupied > 0 && activeTab !== 'mesas' && (
               <span className="absolute top-1 right-[calc(50%+4px)] w-4 h-4 bg-amber-500 text-white text-[10px] rounded-full flex items-center justify-center">
                 {occupied}
