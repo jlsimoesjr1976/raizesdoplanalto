@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CheckCircle2, Smartphone, Send, RefreshCw } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import { CheckCircle2, Smartphone, Send, RefreshCw, UserCheck } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { sendWhatsAppText, generateVerificationCode } from '@/lib/evolution'
 import type { Customer } from '@/types/database'
 
@@ -39,6 +41,9 @@ interface Props {
 }
 
 export function ClienteFormModal({ open, onClose, onSaved, customer, initialName = '' }: Props) {
+  const { role } = useAuth()
+  const isAdmin = role === 'admin'
+  const [skipValidation, setSkipValidation] = useState(false)
   const [name, setName] = useState('')
   const [ddi, setDdi] = useState('+55')
   const [phone, setPhone] = useState('')
@@ -56,6 +61,7 @@ export function ClienteFormModal({ open, onClose, onSaved, customer, initialName
     if (open) {
       setStep('form')
       setCode(''); setSentCode(''); setCodeInput(''); setCodeError(''); setError('')
+      setSkipValidation(false)
       if (customer) {
         setName(customer.name)
         setDdi(customer.phone_ddi ?? '+55')
@@ -75,6 +81,12 @@ export function ClienteFormModal({ open, onClose, onSaved, customer, initialName
     if (!name.trim()) { setError('Nome obrigatório'); return }
     const rawPhone = phone.replace(/\D/g, '')
     if (rawPhone.length < 10) { setError('Celular inválido'); return }
+
+    // Admin: cadastro direto, sem código de validação
+    if (isAdmin && skipValidation) {
+      await saveCustomer(false)
+      return
+    }
 
     setSending(true)
     setError('')
@@ -208,7 +220,9 @@ export function ClienteFormModal({ open, onClose, onSaved, customer, initialName
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Um código será enviado via WhatsApp para validar o número.
+                {skipValidation
+                  ? 'O cliente será cadastrado sem validação por WhatsApp.'
+                  : 'Um código será enviado via WhatsApp para validar o número.'}
               </p>
             </div>
 
@@ -222,13 +236,26 @@ export function ClienteFormModal({ open, onClose, onSaved, customer, initialName
               />
             </div>
 
+            {/* Opção do administrador: cadastro direto */}
+            {isAdmin && (
+              <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+                <div>
+                  <p className="text-sm font-medium">Cadastrar sem validação</p>
+                  <p className="text-xs text-muted-foreground">Pula o código por WhatsApp (somente admin)</p>
+                </div>
+                <Switch checked={skipValidation} onCheckedChange={setSkipValidation} />
+              </div>
+            )}
+
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button type="submit" disabled={sending}>
-                {sending ? 'Enviando...' : (
-                  <><Send className="w-4 h-4 mr-1.5" />Enviar código</>
+              <Button type="submit" disabled={sending || saving}>
+                {isAdmin && skipValidation ? (
+                  saving ? 'Cadastrando...' : (<><UserCheck className="w-4 h-4 mr-1.5" />Cadastrar</>)
+                ) : (
+                  sending ? 'Enviando...' : (<><Send className="w-4 h-4 mr-1.5" />Enviar código</>)
                 )}
               </Button>
             </DialogFooter>
