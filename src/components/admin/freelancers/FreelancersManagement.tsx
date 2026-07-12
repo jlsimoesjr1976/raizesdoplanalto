@@ -293,6 +293,7 @@ export function FreelancersManagement() {
         open={!!contratoFreelancer}
         freelancer={contratoFreelancer}
         onClose={() => setContratoFreelancer(null)}
+        onSaved={() => queryClient.invalidateQueries({ queryKey: ['freelancers'] })}
       />
 
       <FreelancerAnexosModal

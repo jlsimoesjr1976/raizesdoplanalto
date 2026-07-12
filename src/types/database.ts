@@ -135,7 +135,22 @@ export interface Freelancer {
   daily_rate: number
   registration_date: string
   attachments: FinancialAttachment[]
+  contract_data: ContractData | null
   created_at: string
+}
+
+export interface ContractData {
+  profissao: string
+  funcao: string
+  rg: string
+  endereco: string
+  data: string
+  horaInicio: string
+  horaFim: string
+  valor: string
+  formaPagamento: string
+  avisoPrevio: string
+  dataAssinatura: string
 }
 
 export interface Supplier {

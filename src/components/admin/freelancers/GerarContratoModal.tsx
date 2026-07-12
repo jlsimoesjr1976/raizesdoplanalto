@@ -16,6 +16,7 @@ interface Props {
   open: boolean
   freelancer: Freelancer | null
   onClose: () => void
+  onSaved?: () => void
 }
 
 function todayBR() {
@@ -23,7 +24,7 @@ function todayBR() {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
 
-export function GerarContratoModal({ open, freelancer, onClose }: Props) {
+export function GerarContratoModal({ open, freelancer, onClose, onSaved }: Props) {
   const [contratante, setContratante] = useState<ContratanteData | null>(null)
   const [loadingCfg, setLoadingCfg] = useState(true)
 
@@ -45,13 +46,19 @@ export function GerarContratoModal({ open, freelancer, onClose }: Props) {
     if (!open) return
     setLoadingCfg(true)
 
-    // Reset dos campos com base no freelancer
-    if (freelancer) {
-      setValor(Number(freelancer.daily_rate).toFixed(2).replace('.', ','))
-    }
-    setProfissao(''); setRg(''); setEnderecoFreela(''); setFuncao('')
-    setData(''); setHoraInicio('18:00'); setHoraFim('23:00')
-    setFormaPagamento('término do evento, via PIX'); setAvisoPrevio('24')
+    // Pré-preenche com o último contrato salvo, se houver
+    const saved = freelancer?.contract_data ?? null
+    setProfissao(saved?.profissao ?? '')
+    setFuncao(saved?.funcao ?? '')
+    setRg(saved?.rg ?? '')
+    setEnderecoFreela(saved?.endereco ?? '')
+    setData(saved?.data ?? '')
+    setHoraInicio(saved?.horaInicio || '18:00')
+    setHoraFim(saved?.horaFim || '23:00')
+    setValor(saved?.valor || (freelancer ? Number(freelancer.daily_rate).toFixed(2).replace('.', ',') : ''))
+    setFormaPagamento(saved?.formaPagamento ?? 'término do evento, via PIX')
+    setAvisoPrevio(saved?.avisoPrevio ?? '24')
+    // Data de assinatura sempre inicia em hoje (ajustável)
     setDataAssinatura(todayBR())
 
     // Carrega dados do contratante (Configurações / Fiscal)
@@ -84,7 +91,7 @@ export function GerarContratoModal({ open, freelancer, onClose }: Props) {
     loadCfg()
   }, [open, freelancer])
 
-  function handleGenerate(e: FormEvent) {
+  async function handleGenerate(e: FormEvent) {
     e.preventDefault()
     if (!freelancer || !contratante) return
     setGenerating(true)
@@ -106,6 +113,23 @@ export function GerarContratoModal({ open, freelancer, onClose }: Props) {
       })
       const nomeArq = `Contrato_${freelancer.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
       doc.save(nomeArq)
+
+      // Armazena os campos para pré-preencher o próximo contrato
+      const contractData = {
+        profissao: profissao.trim(),
+        funcao: funcao.trim(),
+        rg: rg.trim(),
+        endereco: enderecoFreela.trim(),
+        data: data.trim(),
+        horaInicio,
+        horaFim,
+        valor: valor.trim(),
+        formaPagamento: formaPagamento.trim(),
+        avisoPrevio: avisoPrevio.trim(),
+        dataAssinatura: dataAssinatura.trim(),
+      }
+      await supabase.from('freelancers').update({ contract_data: contractData }).eq('id', freelancer.id)
+      onSaved?.()
       onClose()
     } finally {
       setGenerating(false)
