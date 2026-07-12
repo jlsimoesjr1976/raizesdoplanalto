@@ -8,11 +8,14 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   Plus, Search, Pencil, Trash2, Phone, BriefcaseBusiness, CalendarDays, DollarSign,
+  FileText, Paperclip,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import {
   FreelancerFormModal, applyCpfMask, applyCnpjMask, applyPhoneMask,
 } from './FreelancerFormModal'
+import { GerarContratoModal } from './GerarContratoModal'
+import { FreelancerAnexosModal } from './FreelancerAnexosModal'
 import type { Freelancer, FinancialEntry } from '@/types/database'
 
 function formatDate(dateStr: string) {
@@ -36,6 +39,8 @@ export function FreelancersManagement() {
   const [showForm, setShowForm] = useState(false)
   const [editFreelancer, setEditFreelancer] = useState<Freelancer | null>(null)
   const [launchingId, setLaunchingId] = useState<string | null>(null)
+  const [contratoFreelancer, setContratoFreelancer] = useState<Freelancer | null>(null)
+  const [anexosFreelancer, setAnexosFreelancer] = useState<Freelancer | null>(null)
 
   const { data: freelancers = [], isLoading } = useQuery({
     queryKey: ['freelancers'],
@@ -226,7 +231,7 @@ export function FreelancersManagement() {
               </div>
 
               {/* Ações */}
-              <div className="flex gap-1.5 shrink-0">
+              <div className="flex gap-1.5 shrink-0 flex-wrap justify-end">
                 <Button
                   size="sm"
                   variant="outline"
@@ -236,6 +241,28 @@ export function FreelancersManagement() {
                   disabled={launchingId === f.id}
                 >
                   <DollarSign className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  title="Gerar contrato"
+                  onClick={() => setContratoFreelancer(f)}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  title="Anexos"
+                  className="relative"
+                  onClick={() => setAnexosFreelancer(f)}
+                >
+                  <Paperclip className="w-3.5 h-3.5" />
+                  {(f.attachments?.length ?? 0) > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
+                      {f.attachments.length}
+                    </span>
+                  )}
                 </Button>
                 <Button size="sm" variant="outline" title="Editar" onClick={() => openEdit(f)}>
                   <Pencil className="w-3.5 h-3.5" />
@@ -260,6 +287,19 @@ export function FreelancersManagement() {
         freelancer={editFreelancer}
         onClose={() => { setShowForm(false); setEditFreelancer(null) }}
         onSaved={() => queryClient.invalidateQueries({ queryKey: ['freelancers'] })}
+      />
+
+      <GerarContratoModal
+        open={!!contratoFreelancer}
+        freelancer={contratoFreelancer}
+        onClose={() => setContratoFreelancer(null)}
+      />
+
+      <FreelancerAnexosModal
+        open={!!anexosFreelancer}
+        freelancer={anexosFreelancer}
+        onClose={() => setAnexosFreelancer(null)}
+        onChanged={() => queryClient.invalidateQueries({ queryKey: ['freelancers'] })}
       />
     </div>
   )

@@ -134,6 +134,7 @@ export interface Freelancer {
   phone: string | null
   daily_rate: number
   registration_date: string
+  attachments: FinancialAttachment[]
   created_at: string
 }
 
