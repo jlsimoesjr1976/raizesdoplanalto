@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   Plus, Search, Pencil, Trash2, Phone, BriefcaseBusiness, CalendarDays, DollarSign,
-  FileText, Paperclip,
+  FileText, Paperclip, MessageSquare,
 } from 'lucide-react'
+import { WhatsAppChatModal } from '@/components/admin/marketing/WhatsAppChatModal'
 import { formatCurrency } from '@/lib/utils'
 import {
   FreelancerFormModal, applyCpfMask, applyCnpjMask, applyPhoneMask,
@@ -42,6 +43,7 @@ export function FreelancersManagement() {
   const [launchingId, setLaunchingId] = useState<string | null>(null)
   const [contratoFreelancer, setContratoFreelancer] = useState<Freelancer | null>(null)
   const [anexosFreelancer, setAnexosFreelancer] = useState<Freelancer | null>(null)
+  const [chatFreelancer, setChatFreelancer] = useState<Freelancer | null>(null)
 
   const { data: freelancers = [], isLoading } = useQuery({
     queryKey: ['freelancers'],
@@ -243,6 +245,17 @@ export function FreelancersManagement() {
                 >
                   <DollarSign className="w-3.5 h-3.5" />
                 </Button>
+                {f.phone && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-green-600 hover:text-green-700 border-green-200 hover:bg-green-50"
+                    title="Conversar no WhatsApp"
+                    onClick={() => setChatFreelancer(f)}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -303,6 +316,15 @@ export function FreelancersManagement() {
         onClose={() => setAnexosFreelancer(null)}
         onChanged={() => queryClient.invalidateQueries({ queryKey: ['freelancers'] })}
       />
+
+      {chatFreelancer && (
+        <WhatsAppChatModal
+          open={!!chatFreelancer}
+          numberDigits={`55${(chatFreelancer.phone ?? '').replace(/\D/g, '')}`}
+          name={chatFreelancer.name}
+          onClose={() => setChatFreelancer(null)}
+        />
+      )}
     </div>
   )
 }

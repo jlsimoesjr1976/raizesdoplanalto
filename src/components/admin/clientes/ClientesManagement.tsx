@@ -6,11 +6,12 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   Plus, Search, Pencil, Trash2, CheckCircle2, XCircle,
-  Phone, Cake, ShoppingBag, Users, FileSpreadsheet,
+  Phone, Cake, ShoppingBag, Users, FileSpreadsheet, MessageSquare,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { ClienteFormModal } from './ClienteFormModal'
 import { ImportXlsxModal } from '@/components/admin/ImportXlsxModal'
+import { WhatsAppChatModal } from '@/components/admin/marketing/WhatsAppChatModal'
 import { clientesImportConfig } from '@/lib/importConfigs'
 import type { Customer } from '@/types/database'
 
@@ -25,6 +26,7 @@ export function ClientesManagement() {
   const [showForm, setShowForm] = useState(false)
   const [editCustomer, setEditCustomer] = useState<Customer | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [chatCustomer, setChatCustomer] = useState<Customer | null>(null)
 
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ['customers'],
@@ -193,13 +195,25 @@ export function ClientesManagement() {
 
                 {/* Ações */}
                 <div className="flex gap-1.5 shrink-0">
-                  <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
+                  {c.phone && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-green-600 hover:text-green-700 border-green-200 hover:bg-green-50"
+                      title="Conversar no WhatsApp"
+                      onClick={() => setChatCustomer(c)}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" title="Editar" onClick={() => openEdit(c)}>
                     <Pencil className="w-3.5 h-3.5" />
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     className="text-destructive hover:text-destructive"
+                    title="Excluir"
                     onClick={() => handleDelete(c)}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -224,6 +238,15 @@ export function ClientesManagement() {
         onClose={() => setImportOpen(false)}
         onImported={reload}
       />
+
+      {chatCustomer && (
+        <WhatsAppChatModal
+          open={!!chatCustomer}
+          numberDigits={`${(chatCustomer.phone_ddi ?? '+55').replace(/\D/g, '')}${(chatCustomer.phone ?? '').replace(/\D/g, '')}`}
+          name={chatCustomer.name}
+          onClose={() => setChatCustomer(null)}
+        />
+      )}
     </div>
   )
 }
