@@ -10,6 +10,7 @@ import { FileText, Loader2, Info } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { applyCpfMask, applyCnpjMask } from './FreelancerFormModal'
 import { gerarContratoPdf, type ContratanteData } from '@/lib/contrato'
+import { fetchCnpj } from '@/lib/cnpj'
 import type { Freelancer } from '@/types/database'
 
 interface Props {
@@ -40,6 +41,8 @@ export function GerarContratoModal({ open, freelancer, onClose, onSaved }: Props
   const [formaPagamento, setFormaPagamento] = useState('término do evento, via PIX')
   const [avisoPrevio, setAvisoPrevio] = useState('24')
   const [dataAssinatura, setDataAssinatura] = useState('')
+  const [pixKey, setPixKey] = useState('')
+  const [meiRazao, setMeiRazao] = useState('')  // razão social da MEI (Receita)
   const [generating, setGenerating] = useState(false)
 
   useEffect(() => {
@@ -58,8 +61,24 @@ export function GerarContratoModal({ open, freelancer, onClose, onSaved }: Props
     setValor(saved?.valor || (freelancer ? Number(freelancer.daily_rate).toFixed(2).replace('.', ',') : ''))
     setFormaPagamento(saved?.formaPagamento ?? 'término do evento, via PIX')
     setAvisoPrevio(saved?.avisoPrevio ?? '24')
+    setPixKey(saved?.pixKey || freelancer?.pix_key || '')
+    setMeiRazao('')
     // Data de assinatura sempre inicia em hoje (ajustável)
     setDataAssinatura(todayBR())
+
+    // Se for MEI, busca a razão social e o endereço na Receita
+    if (freelancer?.has_mei && freelancer.cnpj) {
+      fetchCnpj(freelancer.cnpj).then((res) => {
+        if (res.ok && res.data) {
+          setMeiRazao(res.data.razao_social)
+          // pré-preenche o endereço com o da MEI, se ainda vazio
+          const endMei = [res.data.logradouro, res.data.numero, res.data.bairro,
+            res.data.municipio && res.data.uf ? `${res.data.municipio} - ${res.data.uf}` : '',
+            res.data.cep ? `CEP ${res.data.cep}` : ''].filter(Boolean).join(', ')
+          if (endMei) setEnderecoFreela((cur) => cur || endMei)
+        }
+      })
+    }
 
     // Carrega dados do contratante (Configurações / Fiscal)
     async function loadCfg() {
@@ -103,6 +122,10 @@ export function GerarContratoModal({ open, freelancer, onClose, onSaved }: Props
         rg: rg.trim() || '—',
         endereco: enderecoFreela.trim() || '—',
         funcao: funcao.trim() || profissao.trim() || 'Freelancer',
+        isMei: freelancer.has_mei && !!freelancer.cnpj,
+        cnpj: freelancer.cnpj ? applyCnpjMask(freelancer.cnpj) : undefined,
+        razaoSocial: meiRazao,
+        pixKey: pixKey.trim(),
         data: data.trim() || '—',
         horaInicio,
         horaFim,
@@ -127,6 +150,7 @@ export function GerarContratoModal({ open, freelancer, onClose, onSaved }: Props
         formaPagamento: formaPagamento.trim(),
         avisoPrevio: avisoPrevio.trim(),
         dataAssinatura: dataAssinatura.trim(),
+        pixKey: pixKey.trim(),
       }
       await supabase.from('freelancers').update({ contract_data: contractData }).eq('id', freelancer.id)
       onSaved?.()
@@ -164,6 +188,12 @@ export function GerarContratoModal({ open, freelancer, onClose, onSaved }: Props
             </div>
 
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dados do Contratado</p>
+            {freelancer.has_mei && freelancer.cnpj && (
+              <div className="rounded-lg border border-green-200 bg-green-50 p-2.5 text-xs text-green-800">
+                <span className="font-medium">MEI:</span> o contrato será emitido em nome da empresa
+                {meiRazao ? ` "${meiRazao}"` : ''} — CNPJ {applyCnpjMask(freelancer.cnpj)}.
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Profissão</Label>
@@ -215,9 +245,15 @@ export function GerarContratoModal({ open, freelancer, onClose, onSaved }: Props
                 <Input value={avisoPrevio} onChange={(e) => setAvisoPrevio(e.target.value)} placeholder="24" inputMode="numeric" />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Forma de pagamento</Label>
-              <Input value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)} placeholder="Ex: término do evento, via PIX" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Forma de pagamento</Label>
+                <Input value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)} placeholder="Ex: término do evento" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Chave Pix</Label>
+                <Input value={pixKey} onChange={(e) => setPixKey(e.target.value)} placeholder="CPF, celular, e-mail..." />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Data de assinatura</Label>

@@ -15,6 +15,12 @@ export interface ContratoData {
   rg: string
   endereco: string
   funcao: string
+  // MEI (quando o freelancer é Microempreendedor Individual)
+  isMei?: boolean
+  cnpj?: string         // mascarado
+  razaoSocial?: string  // razão social da MEI
+  // Pagamento
+  pixKey?: string
   // Execução
   data: string
   horaInicio: string
@@ -84,9 +90,16 @@ export function gerarContratoPdf(contratante: ContratanteData, c: ContratoData):
   paragraph(
     `CONTRATANTE: ${contratante.nome}, CNPJ/CPF: ${contratante.documento}, com sede em ${contratante.endereco}, doravante denominada simplesmente CONTRATANTE.`
   )
-  paragraph(
-    `CONTRATADO(A): ${c.nome}, ${c.profissao}, CPF: ${c.cpf}, RG: ${c.rg}, residente e domiciliado(a) em ${c.endereco}, doravante denominado(a) simplesmente CONTRATADO(A).`
-  )
+  if (c.isMei && c.cnpj) {
+    const razao = c.razaoSocial && c.razaoSocial.trim() ? c.razaoSocial.trim() : c.nome
+    paragraph(
+      `CONTRATADO(A): ${razao}, ${c.profissao}, pessoa jurídica na modalidade Microempreendedor Individual (MEI), inscrita no CNPJ sob o nº ${c.cnpj}, neste ato representada por ${c.nome}, CPF nº ${c.cpf}, RG nº ${c.rg}, com sede e/ou residência em ${c.endereco}, doravante denominado(a) simplesmente CONTRATADO(A).`
+    )
+  } else {
+    paragraph(
+      `CONTRATADO(A): ${c.nome}, ${c.profissao}, CPF: ${c.cpf}, RG: ${c.rg}, residente e domiciliado(a) em ${c.endereco}, doravante denominado(a) simplesmente CONTRATADO(A).`
+    )
+  }
 
   heading('CLÁUSULA PRIMEIRA – DO OBJETO')
   paragraph(
@@ -101,6 +114,9 @@ export function gerarContratoPdf(contratante: ContratanteData, c: ContratoData):
   heading('CLÁUSULA TERCEIRA – DO VALOR E DA FORMA DE PAGAMENTO')
   paragraph(`3.1. Pelos serviços prestados, a CONTRATANTE pagará ao(à) CONTRATADO(A) o valor total de R$ ${fmtValor(c.valor)} por diária/evento.`)
   paragraph(`3.2. O pagamento será realizado no ${c.formaPagamento}, mediante a assinatura de recibo ou confirmação de quitação.`)
+  if (c.pixKey && c.pixKey.trim()) {
+    paragraph(`3.3. Fica estabelecido que o pagamento será efetuado por meio de transferência PIX para a chave ${c.pixKey.trim()}, de titularidade do(a) CONTRATADO(A).`)
+  }
 
   heading('CLÁUSULA QUARTA – DAS DISPOSIÇÕES GERAIS')
   paragraph('Fica pactuada a total inexistência de vínculo trabalhista entre as partes, não havendo entre o FREELANCER e CONTRATANTE qualquer tipo de relação de subordinação.')

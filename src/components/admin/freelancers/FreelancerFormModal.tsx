@@ -52,6 +52,7 @@ export function FreelancerFormModal({ open, freelancer, onClose, onSaved }: Prop
   const [cnpj, setCnpj] = useState('')
   const [phone, setPhone] = useState('')
   const [dailyRate, setDailyRate] = useState('')
+  const [pixKey, setPixKey] = useState('')
   const [registrationDate, setRegistrationDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -66,6 +67,7 @@ export function FreelancerFormModal({ open, freelancer, onClose, onSaved }: Prop
         setCnpj(freelancer.cnpj ? applyCnpjMask(freelancer.cnpj) : '')
         setPhone(freelancer.phone ? applyPhoneMask(freelancer.phone) : '')
         setDailyRate(String(freelancer.daily_rate))
+        setPixKey(freelancer.pix_key ?? '')
         setRegistrationDate(freelancer.registration_date)
       } else {
         setName('')
@@ -74,6 +76,7 @@ export function FreelancerFormModal({ open, freelancer, onClose, onSaved }: Prop
         setCnpj('')
         setPhone('')
         setDailyRate('')
+        setPixKey('')
         setRegistrationDate(new Date().toISOString().split('T')[0])
       }
     }
@@ -101,6 +104,7 @@ export function FreelancerFormModal({ open, freelancer, onClose, onSaved }: Prop
       cnpj: hasMei ? cnpjDigits : null,
       phone: phoneDigits || null,
       daily_rate: rate,
+      pix_key: pixKey.trim() || null,
       registration_date: registrationDate,
     }
 
@@ -211,6 +215,17 @@ export function FreelancerFormModal({ open, freelancer, onClose, onSaved }: Prop
                 onChange={(e) => setRegistrationDate(e.target.value)}
               />
             </div>
+          </div>
+
+          {/* Chave Pix */}
+          <div className="space-y-1.5">
+            <Label htmlFor="fl-pix">Chave Pix</Label>
+            <Input
+              id="fl-pix"
+              value={pixKey}
+              onChange={(e) => setPixKey(e.target.value)}
+              placeholder="CPF, celular, e-mail ou chave aleatória"
+            />
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}

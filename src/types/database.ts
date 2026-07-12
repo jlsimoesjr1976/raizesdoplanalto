@@ -133,6 +133,7 @@ export interface Freelancer {
   cnpj: string | null
   phone: string | null
   daily_rate: number
+  pix_key: string | null
   registration_date: string
   attachments: FinancialAttachment[]
   contract_data: ContractData | null
@@ -151,6 +152,7 @@ export interface ContractData {
   formaPagamento: string
   avisoPrevio: string
   dataAssinatura: string
+  pixKey?: string
 }
 
 export interface Supplier {
