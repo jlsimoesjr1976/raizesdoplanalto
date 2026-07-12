@@ -285,11 +285,6 @@ function MesaCard({ table, onOpen, onEdit, onDelete, onReserve, onFree }: MesaCa
           )}
         </div>
 
-        {/* Capacidade */}
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Users className="w-3.5 h-3.5" />
-          <span>Cap. {table.capacity}</span>
-        </div>
 
         {/* Informações do pedido ativo */}
         {order && (

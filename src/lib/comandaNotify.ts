@@ -35,6 +35,18 @@ export async function notifyItensLancados(
   await sendWhatsAppRaw(d, text)
 }
 
+/** Item removido da comanda */
+export async function notifyItemRemovido(
+  phoneRaw: string | null | undefined,
+  numero: number | string,
+  item: { name: string; quantity: number; unitPrice: number }
+) {
+  const d = digits(phoneRaw)
+  if (!d) return
+  const text = `❌ *Comanda #${numero}*\n\nItem removido: ${item.quantity}x ${item.name} — ${formatCurrency(item.unitPrice * item.quantity)}`
+  await sendWhatsAppRaw(d, text)
+}
+
 /** Pagamento efetuado / comanda fechada */
 export async function notifyPagamento(
   phoneRaw: string | null | undefined,

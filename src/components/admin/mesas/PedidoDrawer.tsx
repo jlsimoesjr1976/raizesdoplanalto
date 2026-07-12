@@ -13,7 +13,7 @@ import { formatCurrency } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { AdicionarItemModal } from './AdicionarItemModal'
 import { FecharContaModal } from './FecharContaModal'
-import { notifyItensLancados } from '@/lib/comandaNotify'
+import { notifyItensLancados, notifyItemRemovido } from '@/lib/comandaNotify'
 import type { Order, OrderItem } from '@/types/database'
 
 const KITCHEN_STATUS_CONFIG = {
@@ -100,8 +100,18 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
     await loadOrder()
   }
 
-  async function handleRemoveItem(itemId: string) {
-    await supabase.from('order_items').delete().eq('id', itemId)
+  async function handleRemoveItem(item: OrderItem) {
+    await supabase.from('order_items').delete().eq('id', item.id)
+
+    // Notifica o cliente pelo WhatsApp (item removido)
+    if (order?.customer_phone) {
+      notifyItemRemovido(order.customer_phone, order.table_number ?? '', {
+        name: item.product_name,
+        quantity: item.quantity,
+        unitPrice: item.unit_price,
+      })
+    }
+
     await loadOrder()
   }
 
@@ -256,7 +266,7 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
                     </div>
                     {order?.status === 'open' && item.kitchen_status === 'pending' && (
                       <button
-                        onClick={() => handleRemoveItem(item.id)}
+                        onClick={() => handleRemoveItem(item)}
                         className="text-muted-foreground hover:text-destructive transition-colors mt-0.5"
                       >
                         <Trash2 className="w-4 h-4" />

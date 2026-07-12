@@ -17,7 +17,6 @@ interface Props {
 export function MesaFormModal({ open, onClose, onSaved, table, nextNumber = 1 }: Props) {
   const [number, setNumber] = useState('')
   const [name, setName] = useState('')
-  const [capacity, setCapacity] = useState('4')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -25,7 +24,6 @@ export function MesaFormModal({ open, onClose, onSaved, table, nextNumber = 1 }:
     if (open) {
       setNumber(table ? String(table.number) : String(nextNumber))
       setName(table?.name ?? '')
-      setCapacity(table ? String(table.capacity) : '4')
       setError('')
     }
   }, [open, table, nextNumber])
@@ -34,12 +32,11 @@ export function MesaFormModal({ open, onClose, onSaved, table, nextNumber = 1 }:
     e.preventDefault()
     setError('')
     const num = parseInt(number)
-    const cap = parseInt(capacity)
     if (isNaN(num) || num < 1) { setError('Número inválido'); return }
-    if (isNaN(cap) || cap < 1) { setError('Capacidade inválida'); return }
 
     setLoading(true)
-    const payload = { number: num, name: name.trim() || null, capacity: cap }
+    // Capacidade não é mais usada; mantém o valor existente ou um padrão para o schema
+    const payload = { number: num, name: name.trim() || null, capacity: table?.capacity ?? 1 }
 
     const { error: err } = table
       ? await supabase.from('tables').update(payload).eq('id', table.id)
@@ -79,24 +76,13 @@ export function MesaFormModal({ open, onClose, onSaved, table, nextNumber = 1 }:
               onChange={(e) => setName(e.target.value)}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label>Capacidade (lugares) *</Label>
-            <Input
-              type="number"
-              min={1}
-              max={50}
-              value={capacity}
-              onChange={(e) => setCapacity(e.target.value)}
-              required
-            />
-          </div>
           {error && (
             <p className="text-sm text-destructive">{error}</p>
           )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Salvando...' : table ? 'Salvar' : 'Criar Mesa'}
+              {loading ? 'Salvando...' : table ? 'Salvar' : 'Criar Comanda'}
             </Button>
           </DialogFooter>
         </form>
