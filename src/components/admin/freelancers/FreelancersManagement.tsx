@@ -23,11 +23,12 @@ function formatDate(dateStr: string) {
   return `${d}/${m}/${y}`
 }
 
-// Próxima segunda-feira (estritamente futura: se hoje é segunda, retorna a da semana seguinte)
-function nextMondayStr(): string {
+// Próximo dia útil (segunda a sexta; pula sábado e domingo)
+function nextBusinessDayStr(): string {
   const d = new Date()
-  const days = ((1 - d.getDay() + 7) % 7) || 7
-  d.setDate(d.getDate() + days)
+  do {
+    d.setDate(d.getDate() + 1)
+  } while (d.getDay() === 0 || d.getDay() === 6)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
@@ -74,16 +75,16 @@ export function FreelancersManagement() {
     setShowForm(true)
   }
 
-  // Lança a diária do freelancer em Pagamentos, para a próxima segunda-feira.
-  // Se já existir lançamento para essa segunda, soma ao valor e registra no histórico.
+  // Lança a diária do freelancer em Pagamentos, para o próximo dia útil.
+  // Se já existir lançamento para esse dia, soma ao valor e registra no histórico.
   async function lancarDiaria(f: Freelancer) {
     const rate = Number(f.daily_rate)
     if (rate <= 0) {
       toast({ title: 'Diária não definida', description: `Defina o valor da diária de ${f.name} antes de lançar.`, variant: 'destructive' })
       return
     }
-    const monday = nextMondayStr()
-    if (!confirm(`Lançar diária de ${formatCurrency(rate)} para ${f.name}?\n\nPagamento programado para segunda-feira, ${formatDate(monday)}.`)) return
+    const dueDate = nextBusinessDayStr()
+    if (!confirm(`Lançar diária de ${formatCurrency(rate)} para ${f.name}?\n\nPagamento programado para o próximo dia útil, ${formatDate(dueDate)}.`)) return
 
     setLaunchingId(f.id)
     try {
@@ -93,7 +94,7 @@ export function FreelancersManagement() {
         .eq('type', 'payment')
         .eq('beneficiary_type', 'freelancer')
         .eq('beneficiary_id', f.id)
-        .eq('entry_date', monday)
+        .eq('entry_date', dueDate)
         .maybeSingle()
 
       const historyItem = {
@@ -119,7 +120,7 @@ export function FreelancersManagement() {
           type: 'payment',
           description: `Diárias — ${f.name}`,
           amount: rate,
-          entry_date: monday,
+          entry_date: dueDate,
           beneficiary_type: 'freelancer',
           beneficiary_id: f.id,
           beneficiary_name: f.name,
@@ -132,7 +133,7 @@ export function FreelancersManagement() {
       queryClient.invalidateQueries({ queryKey: ['financial-entries', 'payment'] })
       toast({
         title: 'Diária lançada!',
-        description: `${f.name} — total acumulado de ${formatCurrency(total)} para segunda, ${formatDate(monday)}.`,
+        description: `${f.name} — total acumulado de ${formatCurrency(total)} para o dia útil ${formatDate(dueDate)}.`,
       })
     } catch {
       toast({ title: 'Erro ao lançar diária', description: 'Tente novamente.', variant: 'destructive' })
@@ -236,7 +237,7 @@ export function FreelancersManagement() {
                   size="sm"
                   variant="outline"
                   className="text-green-600 hover:text-green-700 border-green-200 hover:bg-green-50"
-                  title="Lançar diária em Pagamentos (próxima segunda-feira)"
+                  title="Lançar diária em Pagamentos (próximo dia útil)"
                   onClick={() => lancarDiaria(f)}
                   disabled={launchingId === f.id}
                 >
