@@ -18,6 +18,8 @@ import {
   Menu,
   X,
   LogOut,
+  FolderPlus,
+  ChevronDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import logoImg from '@/assets/logo.png'
@@ -46,20 +48,50 @@ type Tab =
   | 'marketing'
   | 'settings'
 
-const NAV_ITEMS: { id: Tab; label: string; icon: React.ElementType }[] = [
+type NavItem = { id: Tab; label: string; icon: React.ElementType }
+
+// Itens antes do grupo Cadastros
+const NAV_TOP: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'menu', label: 'Cardápio', icon: UtensilsCrossed },
   { id: 'orders', label: 'Pedidos', icon: ClipboardList },
   { id: 'tables', label: 'Mesas', icon: Table2 },
+]
+
+// Submenus do grupo Cadastros
+const NAV_CADASTROS: NavItem[] = [
+  { id: 'menu', label: 'Cardápio', icon: UtensilsCrossed },
   { id: 'stock', label: 'Insumos', icon: Package },
   { id: 'customers', label: 'Clientes', icon: Users },
   { id: 'freelancers', label: 'Freelancers', icon: BriefcaseBusiness },
   { id: 'suppliers', label: 'Fornecedores', icon: Truck },
   { id: 'employees', label: 'Funcionários', icon: UserCog },
+]
+
+// Itens após o grupo Cadastros
+const NAV_BOTTOM: NavItem[] = [
   { id: 'finance', label: 'Financeiro', icon: Wallet },
   { id: 'marketing', label: 'Marketing', icon: Megaphone },
   { id: 'settings', label: 'Configurações', icon: Settings },
 ]
+
+const ALL_NAV_ITEMS: NavItem[] = [...NAV_TOP, ...NAV_CADASTROS, ...NAV_BOTTOM]
+
+function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+        active
+          ? 'bg-white/20 text-white'
+          : 'text-white/70 hover:bg-white/10 hover:text-white'
+      )}
+    >
+      <item.icon className="w-4 h-4 shrink-0" />
+      {item.label}
+    </button>
+  )
+}
 
 function PlaceholderTab({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
   return (
@@ -77,8 +109,10 @@ export default function AdminDashboard() {
   const { profile, signOut } = useAuth()
   const [activeTab, setActiveTab] = useState<Tab>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [cadastrosOpen, setCadastrosOpen] = useState(false)
 
-  const activeItem = NAV_ITEMS.find((i) => i.id === activeTab)!
+  const activeItem = ALL_NAV_ITEMS.find((i) => i.id === activeTab)!
+  const cadastrosActive = NAV_CADASTROS.some((i) => i.id === activeTab)
 
   function renderContent() {
     if (activeTab === 'dashboard') return <DashboardOverview />
@@ -123,23 +157,50 @@ export default function AdminDashboard() {
         </div>
 
         <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
-          {NAV_ITEMS.map((item) => (
-            <button
+          {NAV_TOP.map((item) => (
+            <NavButton
               key={item.id}
-              onClick={() => {
-                setActiveTab(item.id)
-                setSidebarOpen(false)
-              }}
-              className={cn(
-                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                activeTab === item.id
-                  ? 'bg-white/20 text-white'
-                  : 'text-white/70 hover:bg-white/10 hover:text-white'
-              )}
-            >
-              <item.icon className="w-4 h-4 shrink-0" />
-              {item.label}
-            </button>
+              item={item}
+              active={activeTab === item.id}
+              onClick={() => { setActiveTab(item.id); setSidebarOpen(false) }}
+            />
+          ))}
+
+          {/* Grupo Cadastros (colapsável) */}
+          <button
+            onClick={() => setCadastrosOpen((v) => !v)}
+            className={cn(
+              'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+              cadastrosActive && !cadastrosOpen
+                ? 'bg-white/10 text-white'
+                : 'text-white/70 hover:bg-white/10 hover:text-white'
+            )}
+          >
+            <FolderPlus className="w-4 h-4 shrink-0" />
+            <span className="flex-1 text-left">Cadastros</span>
+            <ChevronDown className={cn('w-4 h-4 shrink-0 transition-transform', cadastrosOpen && 'rotate-180')} />
+          </button>
+
+          {cadastrosOpen && (
+            <div className="ml-3 pl-2 border-l border-white/15 space-y-1">
+              {NAV_CADASTROS.map((item) => (
+                <NavButton
+                  key={item.id}
+                  item={item}
+                  active={activeTab === item.id}
+                  onClick={() => { setActiveTab(item.id); setSidebarOpen(false) }}
+                />
+              ))}
+            </div>
+          )}
+
+          {NAV_BOTTOM.map((item) => (
+            <NavButton
+              key={item.id}
+              item={item}
+              active={activeTab === item.id}
+              onClick={() => { setActiveTab(item.id); setSidebarOpen(false) }}
+            />
           ))}
         </nav>
 
