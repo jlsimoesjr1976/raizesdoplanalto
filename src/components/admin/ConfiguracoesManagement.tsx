@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import {
   CheckCircle2, Percent, Eye, EyeOff, CreditCard, Loader2, RefreshCw, XCircle,
-  Building2, MessageSquare, Search,
+  Building2, MessageSquare, Search, FileText,
 } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
@@ -47,6 +47,11 @@ interface Settings {
   mp_access_token: string
   mp_device_id: string
   mp_point_enabled: boolean
+  // Focus NFe
+  focus_environment: string
+  focus_token_homologacao: string
+  focus_token_producao: string
+  focus_enabled: boolean
 }
 
 const DEFAULTS: Settings = {
@@ -75,6 +80,10 @@ const DEFAULTS: Settings = {
   mp_access_token: '',
   mp_device_id: '',
   mp_point_enabled: false,
+  focus_environment: 'homologacao',
+  focus_token_homologacao: '',
+  focus_token_producao: '',
+  focus_enabled: false,
 }
 
 const STRING_KEYS: (keyof Settings)[] = [
@@ -83,6 +92,7 @@ const STRING_KEYS: (keyof Settings)[] = [
   'fiscal_bairro', 'fiscal_municipio', 'fiscal_uf', 'fiscal_telefone',
   'cnae_codigo', 'cnae_descricao', 'evolution_api_url', 'evolution_api_key',
   'evolution_instance', 'mp_environment', 'mp_public_key', 'mp_access_token', 'mp_device_id',
+  'focus_environment', 'focus_token_homologacao', 'focus_token_producao',
 ]
 
 async function loadSetting(key: string) {
@@ -101,6 +111,8 @@ export function ConfiguracoesManagement() {
   const [saved, setSaved] = useState(false)
   const [showApiKey, setShowApiKey] = useState(false)
   const [showMpToken, setShowMpToken] = useState(false)
+  const [showFocusHom, setShowFocusHom] = useState(false)
+  const [showFocusProd, setShowFocusProd] = useState(false)
 
   // CNPJ
   const [cnpjLoading, setCnpjLoading] = useState(false)
@@ -118,7 +130,7 @@ export function ConfiguracoesManagement() {
 
   useEffect(() => {
     async function load() {
-      const keys = [...STRING_KEYS, 'service_charge_percent', 'service_charge_enabled', 'mp_point_enabled']
+      const keys = [...STRING_KEYS, 'service_charge_percent', 'service_charge_enabled', 'mp_point_enabled', 'focus_enabled']
       const values = await Promise.all(keys.map((k) => loadSetting(k)))
       const map = new Map(keys.map((k, i) => [k, values[i]]))
       const str = (v: unknown) => (v as string ?? '').replace(/^"|"$/g, '')
@@ -135,6 +147,8 @@ export function ConfiguracoesManagement() {
       next.service_charge_enabled = enabled === undefined ? DEFAULTS.service_charge_enabled : Boolean(enabled)
       next.mp_environment = str(map.get('mp_environment')) || 'test'
       next.mp_point_enabled = map.get('mp_point_enabled') === true
+      next.focus_environment = str(map.get('focus_environment')) || 'homologacao'
+      next.focus_enabled = map.get('focus_enabled') === true
 
       setSettings(next)
       setLoading(false)
@@ -231,6 +245,7 @@ export function ConfiguracoesManagement() {
       saveSetting('service_charge_percent', settings.service_charge_percent),
       saveSetting('service_charge_enabled', settings.service_charge_enabled),
       saveSetting('mp_point_enabled', settings.mp_point_enabled),
+      saveSetting('focus_enabled', settings.focus_enabled),
     )
     await Promise.all(ops)
     setSaving(false)
@@ -256,6 +271,7 @@ export function ConfiguracoesManagement() {
             <TabsTrigger value="service" className="gap-1.5"><Percent className="w-4 h-4" />Taxa de Serviço</TabsTrigger>
             <TabsTrigger value="whatsapp" className="gap-1.5"><MessageSquare className="w-4 h-4" />WhatsApp</TabsTrigger>
             <TabsTrigger value="mercadopago" className="gap-1.5"><CreditCard className="w-4 h-4" />Mercado Pago</TabsTrigger>
+            <TabsTrigger value="focusnfe" className="gap-1.5"><FileText className="w-4 h-4" />Focus NFe</TabsTrigger>
           </TabsList>
 
           {/* ── FISCAL ── */}
@@ -580,6 +596,83 @@ export function ConfiguracoesManagement() {
                     </span>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── FOCUS NFe ── */}
+          <TabsContent value="focusnfe" className="mt-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-primary" />
+                    <CardTitle className="text-base">Focus NFe</CardTitle>
+                  </div>
+                  <Badge variant={settings.focus_environment === 'homologacao' ? 'secondary' : 'default'} className="text-xs">
+                    {settings.focus_environment === 'homologacao' ? 'Homologação' : 'Produção'}
+                  </Badge>
+                </div>
+                <CardDescription>Emissão de notas fiscais via Focus NFe</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+                  <div>
+                    <p className="text-sm font-medium">Ativar Focus NFe</p>
+                    <p className="text-xs text-muted-foreground">Habilita a integração de notas fiscais</p>
+                  </div>
+                  <Switch checked={settings.focus_enabled} onCheckedChange={(v) => setSettings((s) => ({ ...s, focus_enabled: v }))} />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Ambiente</Label>
+                  <Select value={settings.focus_environment} onValueChange={set('focus_environment')}>
+                    <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="homologacao">Homologação (testes)</SelectItem>
+                      <SelectItem value="producao">Produção</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    O ambiente selecionado define qual token será utilizado na emissão.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Token de Homologação</Label>
+                  <div className="relative">
+                    <Input
+                      type={showFocusHom ? 'text' : 'password'}
+                      value={settings.focus_token_homologacao}
+                      onChange={(e) => set('focus_token_homologacao')(e.target.value)}
+                      placeholder="Token da API (homologação)"
+                      className="pr-10"
+                    />
+                    <button type="button" onClick={() => setShowFocusHom((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showFocusHom ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Token de Produção</Label>
+                  <div className="relative">
+                    <Input
+                      type={showFocusProd ? 'text' : 'password'}
+                      value={settings.focus_token_producao}
+                      onChange={(e) => set('focus_token_producao')(e.target.value)}
+                      placeholder="Token da API (produção)"
+                      className="pr-10"
+                    />
+                    <button type="button" onClick={() => setShowFocusProd((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showFocusProd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Os tokens são obtidos no painel da Focus NFe. Cada ambiente possui um token próprio.
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
