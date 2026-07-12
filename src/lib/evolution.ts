@@ -219,6 +219,31 @@ export async function fetchMessages(jid: string): Promise<{ ok: boolean; message
   }
 }
 
+/** Mensagens capturadas via webhook (tabela whatsapp_messages) */
+export async function fetchStoredMessages(jid: string): Promise<WhatsAppMessage[]> {
+  const { data } = await supabase
+    .from('whatsapp_messages')
+    .select('message_id, from_me, text, ts')
+    .eq('jid', jid)
+    .order('ts', { ascending: true })
+  return (data ?? []).map((r) => ({
+    id: r.message_id as string,
+    fromMe: !!r.from_me,
+    text: (r.text as string) ?? '',
+    timestamp: Number(r.ts),
+  }))
+}
+
+/** Mescla histórico da Evolution (enviadas) com o webhook (recebidas/novas) */
+export async function fetchConversationMessages(jid: string): Promise<{ ok: boolean; messages: WhatsAppMessage[] }> {
+  const [evo, stored] = await Promise.all([fetchMessages(jid), fetchStoredMessages(jid)])
+  const map = new Map<string, WhatsAppMessage>()
+  if (evo.ok) for (const m of evo.messages) map.set(m.id, m)
+  for (const m of stored) map.set(m.id, m)
+  const messages = [...map.values()].sort((a, b) => a.timestamp - b.timestamp)
+  return { ok: evo.ok || stored.length > 0, messages }
+}
+
 /** Envia texto para um número já normalizado (somente dígitos, com DDI) */
 export async function sendWhatsAppRaw(numberDigits: string, text: string): Promise<{ ok: boolean; error?: string }> {
   const config = await getConfig()

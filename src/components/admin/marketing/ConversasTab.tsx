@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
-  fetchChats, fetchMessages, sendWhatsAppRaw, sendWhatsAppMedia, phoneKey,
+  fetchChats, fetchConversationMessages, sendWhatsAppRaw, sendWhatsAppMedia, phoneKey,
   type WhatsAppChat, type WhatsAppMessage,
 } from '@/lib/evolution'
 import { ClienteFormModal } from '@/components/admin/clientes/ClienteFormModal'
@@ -96,7 +96,7 @@ export function ConversasTab() {
     setReply('')
     clearChatImage()
     setLoadingMsgs(true)
-    const res = await fetchMessages(chat.jid)
+    const res = await fetchConversationMessages(chat.jid)
     setMessages(res.ok ? res.messages : [])
     setLoadingMsgs(false)
   }
@@ -117,6 +117,24 @@ export function ConversasTab() {
   useEffect(() => {
     msgEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Realtime: novas mensagens (respostas do cliente) da conversa aberta
+  useEffect(() => {
+    if (!selected) return
+    const jid = selected.jid
+    const channel = supabase
+      .channel(`wa-conv-${jid}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'whatsapp_messages', filter: `jid=eq.${jid}`,
+      }, (payload) => {
+        const r = payload.new as { message_id: string; from_me: boolean; text: string; ts: number }
+        setMessages((prev) => prev.some((m) => m.id === r.message_id)
+          ? prev
+          : [...prev, { id: r.message_id, fromMe: !!r.from_me, text: r.text ?? '', timestamp: Number(r.ts) }])
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [selected])
 
   async function handleSend() {
     if (!selected) return

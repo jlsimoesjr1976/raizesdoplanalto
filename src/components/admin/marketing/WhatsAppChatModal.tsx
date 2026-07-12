@@ -6,7 +6,7 @@ import { Send, Loader2, ImagePlus, X, RefreshCw, MessageSquare, Phone } from 'lu
 import { cn } from '@/lib/utils'
 import { supabase } from '@/integrations/supabase/client'
 import {
-  fetchMessages, sendWhatsAppRaw, sendWhatsAppMedia, type WhatsAppMessage,
+  fetchConversationMessages, sendWhatsAppRaw, sendWhatsAppMedia, type WhatsAppMessage,
 } from '@/lib/evolution'
 
 function fmtTime(ts: number): string {
@@ -49,7 +49,7 @@ export function WhatsAppChatModal({ open, numberDigits, name, onClose }: Props) 
   async function loadMessages() {
     if (!digits) return
     setLoading(true)
-    const res = await fetchMessages(jid)
+    const res = await fetchConversationMessages(jid)
     if (res.ok) {
       // Preserva mensagens enviadas agora (otimistas) que ainda não voltaram do servidor
       setMessages((prev) => {
@@ -68,6 +68,24 @@ export function WhatsAppChatModal({ open, numberDigits, name, onClose }: Props) 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, numberDigits])
+
+  // Realtime: novas mensagens capturadas pelo webhook (respostas do cliente)
+  useEffect(() => {
+    if (!open || !digits) return
+    const channel = supabase
+      .channel(`wa-chat-${jid}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'whatsapp_messages', filter: `jid=eq.${jid}`,
+      }, (payload) => {
+        const r = payload.new as { message_id: string; from_me: boolean; text: string; ts: number }
+        setMessages((prev) => prev.some((m) => m.id === r.message_id)
+          ? prev
+          : [...prev, { id: r.message_id, fromMe: !!r.from_me, text: r.text ?? '', timestamp: Number(r.ts) }])
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, jid])
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
