@@ -14,9 +14,9 @@ import { formatCurrency } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { AdicionarItemModal } from './AdicionarItemModal'
 import { FecharContaModal } from './FecharContaModal'
-import { notifyItensLancados, notifyItemRemovido } from '@/lib/comandaNotify'
+import { notifyItensLancados, notifyItemRemovido, notifyPreparoIniciado } from '@/lib/comandaNotify'
 import { imprimirComanda } from '@/lib/printComanda'
-import type { Order, OrderItem } from '@/types/database'
+import type { Order, OrderItem, PrepStation } from '@/types/database'
 
 const KITCHEN_STATUS_CONFIG = {
   pending:    { label: 'Aguardando', icon: Clock,        color: 'bg-gray-100 text-gray-700' },
@@ -80,7 +80,7 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
     return () => { supabase.removeChannel(channel) }
   }, [open, orderId, loadOrder])
 
-  async function handleAddItems(items: { product: { id: string; name: string; price: number }; quantity: number; notes: string }[]) {
+  async function handleAddItems(items: { product: { id: string; name: string; price: number; prep_station?: PrepStation }; quantity: number; notes: string }[]) {
     if (!orderId) return
     const rows = items.map((i) => ({
       order_id: orderId,
@@ -89,6 +89,7 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
       quantity: i.quantity,
       unit_price: i.product.price,
       notes: i.notes || null,
+      prep_station: i.product.prep_station ?? null,
     }))
     await supabase.from('order_items').insert(rows)
 
@@ -99,6 +100,15 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
         quantity: i.quantity,
         unitPrice: i.product.price,
       })))
+
+      // Se algum item vai para uma fila de preparo, avisa que o pedido começou a ser preparado
+      const emPreparo = items.filter((i) => i.product.prep_station === 'bar' || i.product.prep_station === 'cozinha')
+      if (emPreparo.length > 0) {
+        notifyPreparoIniciado(order.customer_phone, order.customer_name, order.table_number ?? '', emPreparo.map((i) => ({
+          name: i.product.name,
+          quantity: i.quantity,
+        })))
+      }
     }
 
     await loadOrder()

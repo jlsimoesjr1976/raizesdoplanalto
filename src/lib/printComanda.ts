@@ -79,7 +79,11 @@ export async function imprimirComanda(d: PrintComandaData) {
     <div class="foot">Documento sem valor fiscal</div>
   </body></html>`
 
-  // Imprime via iframe oculto (não depende de pop-up)
+  printHtml(html)
+}
+
+/** Dispara a impressão de um HTML via iframe oculto (não depende de pop-up) */
+function printHtml(html: string) {
   const iframe = document.createElement('iframe')
   iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
   document.body.appendChild(iframe)
@@ -94,4 +98,68 @@ export async function imprimirComanda(d: PrintComandaData) {
   }
   const doc = iframe.contentWindow?.document
   if (doc) { doc.open(); doc.write(html); doc.close() } else { cleanup() }
+}
+
+export interface PrintPreparoItem {
+  quantity: number
+  product_name: string
+  notes?: string | null
+}
+
+export interface PrintPreparoData {
+  numero: number | string
+  cliente?: string | null
+  atendente?: string | null
+  station: 'bar' | 'cozinha'
+  items: PrintPreparoItem[]
+}
+
+/** Imprime o cupom da fila de preparo (Cozinha/Bar) em impressora térmica 80mm */
+export async function imprimirPreparo(d: PrintPreparoData) {
+  const empresa = await getEmpresa()
+  const origem = d.station === 'bar' ? 'BAR' : 'COZINHA'
+  const linhas = d.items.map((i) => `
+    <tr>
+      <td class="q">${i.quantity}x</td>
+      <td class="d">${esc(i.product_name)}${i.notes ? `<div class="obs">↳ ${esc(i.notes)}</div>` : ''}</td>
+    </tr>`).join('')
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Preparo #${d.numero}</title>
+  <style>
+    @page { size: 80mm auto; margin: 0; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      width: 80mm; padding: 3mm 4mm; color: #000;
+      font-family: 'Courier New', 'Consolas', monospace;
+      font-size: 13px; line-height: 1.4; -webkit-print-color-adjust: exact;
+    }
+    h1 { font-size: 14px; font-weight: bold; margin: 0; text-align: center; text-transform: uppercase; }
+    .origem { text-align: center; font-size: 18px; font-weight: bold; margin: 1mm 0 2mm; letter-spacing: 1px; }
+    .info { font-size: 12px; }
+    .info div { display: flex; justify-content: space-between; gap: 6px; }
+    .hr { border-top: 1px dashed #000; margin: 2mm 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    td { padding: 2px 0; vertical-align: top; }
+    td.q { width: 9mm; font-weight: bold; }
+    td.d { word-break: break-word; }
+    .obs { font-size: 11px; font-style: italic; }
+    .foot { text-align: center; font-size: 10px; margin-top: 3mm; }
+  </style></head><body>
+    <h1>${esc(empresa)}</h1>
+    <div class="origem">${origem}</div>
+    <div class="hr"></div>
+    <div class="info">
+      <div><span>Comanda</span><span>#${d.numero}</span></div>
+      ${d.cliente ? `<div><span>Cliente</span><span>${esc(d.cliente)}</span></div>` : ''}
+      ${d.atendente ? `<div><span>Atendente</span><span>${esc(d.atendente)}</span></div>` : ''}
+      <div><span>Emitido</span><span>${fmtDateTime(new Date().toISOString())}</span></div>
+    </div>
+    <div class="hr"></div>
+    <table>${linhas}</table>
+    <div class="hr"></div>
+    <div class="foot">Cupom de preparo — sem valor fiscal</div>
+  </body></html>`
+
+  printHtml(html)
 }

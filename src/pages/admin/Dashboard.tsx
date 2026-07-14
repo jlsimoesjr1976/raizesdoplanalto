@@ -36,8 +36,9 @@ import { FuncionariosManagement } from '@/components/admin/funcionarios/Funciona
 import { MarketingManagement } from '@/components/admin/marketing/MarketingManagement'
 import { NotasFiscaisManagement } from '@/components/admin/notas/NotasFiscaisManagement'
 import { UsuariosManagement } from '@/components/admin/usuarios/UsuariosManagement'
+import { FilaPreparoManagement } from '@/components/admin/preparo/FilaPreparoManagement'
 import { DashboardOverview } from '@/components/admin/DashboardOverview'
-import { ShieldCheck, ChefHat, Wine } from 'lucide-react'
+import { ShieldCheck, ChefHat } from 'lucide-react'
 import { ROLE_LABELS, type Role } from '@/types/database'
 
 type Tab =
@@ -142,7 +143,7 @@ export default function AdminDashboard() {
   const topItems = NAV_TOP.filter((i) => canAccess(role, i.id))
   const cadastrosItems = NAV_CADASTROS.filter((i) => canAccess(role, i.id))
   const bottomItems = NAV_BOTTOM.filter((i) => canAccess(role, i.id))
-  const queueVisible = role === 'cozinha' || role === 'bar'
+  const queueVisible = role === 'cozinha' || role === 'bar' || role === 'admin'
 
   // Aba inicial válida para o papel
   const firstTab: Tab =
@@ -176,7 +177,7 @@ export default function AdminDashboard() {
     if (activeTab === 'marketing') return <MarketingManagement />
     if (activeTab === 'settings') return <ConfiguracoesManagement />
     if (activeTab === 'users') return <UsuariosManagement />
-    if (activeTab === 'queue') return <PlaceholderTab icon={role === 'bar' ? Wine : ChefHat} label={role === 'bar' ? 'Fila de Preparos — Bar' : 'Fila de Preparos — Cozinha'} />
+    if (activeTab === 'queue') return <FilaPreparoManagement />
     return <PlaceholderTab icon={activeItem.icon} label={activeItem.label} />
   }
 

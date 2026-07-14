@@ -123,6 +123,7 @@ export interface OrderItem {
   unit_price: number
   notes: string | null
   kitchen_status: KitchenStatus
+  prep_station: PrepStation
   created_at: string
 }
 

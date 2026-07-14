@@ -47,6 +47,51 @@ export async function notifyItemRemovido(
   await sendWhatsAppRaw(d, text)
 }
 
+/** Pedido começou a ser preparado (itens enviados à fila de preparo) */
+export async function notifyPreparoIniciado(
+  phoneRaw: string | null | undefined,
+  name: string | null,
+  numero: number | string,
+  itens: { name: string; quantity: number }[]
+) {
+  const d = digits(phoneRaw)
+  if (!d || itens.length === 0) return
+  const linhas = itens.map((i) => `• ${i.quantity}x ${i.name}`).join('\n')
+  const text = `👨‍🍳 *Comanda #${numero}*\n\nOlá, ${firstName(name)}! Seu pedido *começou a ser preparado*:\n${linhas}\n\nAvisaremos assim que estiver pronto. 😉`
+  await sendWhatsAppRaw(d, text)
+}
+
+/** Pedido pronto — mensagem para o cliente */
+export async function notifyPedidoProntoCliente(
+  phoneRaw: string | null | undefined,
+  name: string | null,
+  numero: number | string,
+  itens: { name: string; quantity: number }[]
+) {
+  const d = digits(phoneRaw)
+  if (!d) return
+  const linhas = itens.map((i) => `• ${i.quantity}x ${i.name}`).join('\n')
+  const text = `🔔 *Comanda #${numero}*\n\n${firstName(name)}, seu pedido está *PRONTO*! ✅\n${linhas}\n\nBom apetite! 🍽️`
+  await sendWhatsAppRaw(d, text)
+}
+
+/** Pedido pronto — aviso para o atendente responsável */
+export async function notifyPedidoProntoAtendente(
+  phoneRaw: string | null | undefined,
+  atendenteName: string | null,
+  numero: number | string,
+  clienteName: string | null,
+  station: 'bar' | 'cozinha',
+  itens: { name: string; quantity: number }[]
+) {
+  const d = digits(phoneRaw)
+  if (!d) return
+  const linhas = itens.map((i) => `• ${i.quantity}x ${i.name}`).join('\n')
+  const origem = station === 'bar' ? 'Bar' : 'Cozinha'
+  const text = `🔔 *${origem} — Pedido pronto*\n\nOlá, ${firstName(atendenteName)}! O pedido da *comanda #${numero}*${clienteName ? ` (${clienteName})` : ''} está pronto para entrega:\n${linhas}`
+  await sendWhatsAppRaw(d, text)
+}
+
 /** Pagamento efetuado / comanda fechada */
 export async function notifyPagamento(
   phoneRaw: string | null | undefined,
