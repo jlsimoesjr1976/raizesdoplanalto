@@ -15,36 +15,60 @@ function fmtDateTime(s: string | null) {
   return new Date(s).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+function esc(s: string) {
+  return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string))
+}
+
 function imprimirComanda(order: OrderWithItems, empresa: string) {
   const items = order.order_items ?? []
   const linhas = items.map((i) => `
     <tr>
-      <td>${i.quantity}x</td>
-      <td>${i.product_name}</td>
-      <td style="text-align:right">${formatCurrency(i.unit_price * i.quantity)}</td>
+      <td class="q">${i.quantity}x</td>
+      <td class="d">${esc(i.product_name)}</td>
+      <td class="v">${formatCurrency(i.unit_price * i.quantity)}</td>
     </tr>`).join('')
 
+  // Layout para impressora térmica de 80mm (fonte monoespaçada)
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Comanda #${order.table_number}</title>
   <style>
-    * { font-family: -apple-system, Arial, sans-serif; }
-    body { max-width: 360px; margin: 0 auto; padding: 16px; color: #111; }
-    h1 { font-size: 16px; text-align: center; margin: 0 0 2px; }
-    .sub { text-align:center; color:#666; font-size:12px; margin-bottom:12px; }
-    .info { font-size: 12px; color:#333; margin-bottom: 10px; }
+    @page { size: 80mm auto; margin: 0; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      width: 80mm;
+      padding: 3mm 4mm;
+      color: #000;
+      font-family: 'Courier New', 'Consolas', monospace;
+      font-size: 12px;
+      line-height: 1.35;
+      -webkit-print-color-adjust: exact;
+    }
+    .center { text-align: center; }
+    h1 { font-size: 15px; font-weight: bold; margin: 0; text-align: center; text-transform: uppercase; }
+    .sub { text-align: center; font-size: 11px; margin: 1mm 0 2mm; }
+    .info { font-size: 11px; margin-bottom: 1mm; }
+    .info div { display: flex; justify-content: space-between; gap: 6px; }
+    .hr { border-top: 1px dashed #000; margin: 2mm 0; }
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    td { padding: 3px 0; vertical-align: top; }
-    .total { border-top: 1px dashed #999; margin-top: 8px; padding-top: 8px; display:flex; justify-content:space-between; font-weight:bold; font-size:14px; }
-    .foot { text-align:center; color:#888; font-size:11px; margin-top:16px; }
+    td { padding: 1px 0; vertical-align: top; }
+    td.q { width: 8mm; }
+    td.d { word-break: break-word; padding-right: 3px; }
+    td.v { width: 20mm; text-align: right; white-space: nowrap; }
+    .total { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; margin-top: 1mm; }
+    .foot { text-align: center; font-size: 10px; margin-top: 3mm; }
   </style></head><body>
-    <h1>${empresa}</h1>
+    <h1>${esc(empresa)}</h1>
     <div class="sub">Comprovante de Consumo</div>
+    <div class="hr"></div>
     <div class="info">
-      <div><b>Comanda:</b> #${order.table_number}</div>
-      ${order.customer_name ? `<div><b>Cliente:</b> ${order.customer_name}</div>` : ''}
-      <div><b>Fechada em:</b> ${fmtDateTime(order.closed_at)}</div>
+      <div><span>Comanda</span><span>#${order.table_number}</span></div>
+      ${order.customer_name ? `<div><span>Cliente</span><span>${esc(order.customer_name)}</span></div>` : ''}
+      <div><span>Fechada</span><span>${fmtDateTime(order.closed_at)}</span></div>
     </div>
+    <div class="hr"></div>
     <table>${linhas}</table>
-    <div class="total"><span>Total</span><span>${formatCurrency(Number(order.total))}</span></div>
+    <div class="hr"></div>
+    <div class="total"><span>TOTAL</span><span>${formatCurrency(Number(order.total))}</span></div>
     <div class="foot">Documento sem valor fiscal</div>
   </body></html>`
 
