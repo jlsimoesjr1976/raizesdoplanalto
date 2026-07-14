@@ -256,6 +256,7 @@ export function ProdutosTab() {
   const queryClient = useQueryClient()
   const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('produtos-view') as ViewMode) || 'grid')
   const [filterCategory, setFilterCategory] = useState<string>('all')
+  const [filterStation, setFilterStation] = useState<'all' | 'na' | 'bar' | 'cozinha'>('all')
   const [search, setSearch] = useState('')
   const [editProduct, setEditProduct] = useState<ProductWithCategory | null>(null)
   const [editOpen, setEditOpen] = useState(false)
@@ -269,7 +270,7 @@ export function ProdutosTab() {
       const { data, error } = await supabase
         .from('products')
         .select('*, categories(name, id, description, image_url, sort_order, active, created_at)')
-        .order('sort_order')
+        .order('name')
       if (error) throw error
       return data as ProductWithCategory[]
     },
@@ -335,10 +336,12 @@ export function ProdutosTab() {
   const filtered = useMemo(() => {
     return products.filter((p) => {
       const matchCat = filterCategory === 'all' || p.category_id === filterCategory
+      const matchStation = filterStation === 'all'
+        || (filterStation === 'na' ? p.prep_station === null : p.prep_station === filterStation)
       const matchSearch = p.name.toLowerCase().includes(search.toLowerCase())
-      return matchCat && matchSearch
+      return matchCat && matchStation && matchSearch
     })
-  }, [products, filterCategory, search])
+  }, [products, filterCategory, filterStation, search])
 
   const openEdit = (p: ProductWithCategory | null) => {
     setEditProduct(p)
@@ -409,6 +412,17 @@ export function ProdutosTab() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={filterStation} onValueChange={(v) => setFilterStation(v as typeof filterStation)}>
+          <SelectTrigger className="w-full sm:w-40">
+            <SelectValue placeholder="Fila de preparo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as filas</SelectItem>
+            <SelectItem value="na">N/A</SelectItem>
+            <SelectItem value="bar">Bar</SelectItem>
+            <SelectItem value="cozinha">Cozinha</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Loading */}
@@ -425,11 +439,11 @@ export function ProdutosTab() {
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
           <UtensilsCrossed className="w-10 h-10 opacity-30" />
           <p className="text-sm">
-            {search || filterCategory !== 'all'
+            {search || filterCategory !== 'all' || filterStation !== 'all'
               ? 'Nenhum produto encontrado com os filtros atuais.'
               : 'Nenhum produto cadastrado.'}
           </p>
-          {!search && filterCategory === 'all' && (
+          {!search && filterCategory === 'all' && filterStation === 'all' && (
             <Button size="sm" variant="outline" onClick={() => openEdit(null)}>
               <Plus className="w-4 h-4 mr-1" />
               Criar primeiro produto
