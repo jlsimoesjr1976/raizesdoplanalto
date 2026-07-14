@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import {
   Plus, Trash2, Clock, ChefHat, CheckCircle2, Truck,
-  Users, UserCheck, Receipt, CircleDollarSign, Pencil, Check, User, Phone,
+  Users, UserCheck, Receipt, CircleDollarSign, Pencil, Check, User, Phone, Printer,
 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import { AdicionarItemModal } from './AdicionarItemModal'
 import { FecharContaModal } from './FecharContaModal'
 import { notifyItensLancados, notifyItemRemovido } from '@/lib/comandaNotify'
+import { imprimirComanda } from '@/lib/printComanda'
 import type { Order, OrderItem } from '@/types/database'
 
 const KITCHEN_STATUS_CONFIG = {
@@ -118,6 +119,21 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
     await loadOrder()
   }
 
+  function handlePrint() {
+    if (!order) return
+    const items = (order.order_items ?? []).sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    )
+    imprimirComanda({
+      numero: order.table_number ?? '',
+      cliente: order.customer_name,
+      data: order.status === 'open' ? order.created_at : order.closed_at,
+      aberta: order.status === 'open',
+      items: items.map((i) => ({ quantity: i.quantity, product_name: i.product_name, unit_price: i.unit_price })),
+      total: Number(order.total),
+    })
+  }
+
   // Sem consumo (total 0,00): encerra a comanda e libera a mesa diretamente
   async function handleLiberarMesa() {
     if (!order) return
@@ -166,9 +182,21 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
                   ? ` — ${(order as Order & { tables?: { name?: string } })?.tables?.name}`
                   : ''}
               </SheetTitle>
-              <Badge variant="outline" className="text-xs">
-                {order?.status === 'open' ? 'Aberta' : order?.status === 'paid' ? 'Paga' : 'Cancelada'}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7"
+                  title="Imprimir comanda"
+                  onClick={handlePrint}
+                  disabled={!order || (order.order_items?.length ?? 0) === 0}
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                </Button>
+                <Badge variant="outline" className="text-xs">
+                  {order?.status === 'open' ? 'Aberta' : order?.status === 'paid' ? 'Paga' : 'Cancelada'}
+                </Badge>
+              </div>
             </div>
 
             {/* Info da mesa */}
