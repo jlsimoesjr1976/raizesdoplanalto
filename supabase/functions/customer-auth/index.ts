@@ -74,7 +74,6 @@ Deno.serve(async (req) => {
       const password = payload.password ?? ''
       if (!name) return json({ error: 'Informe seu nome.' }, 400)
       if (!email || !email.includes('@')) return json({ error: 'Informe um e-mail válido.' }, 400)
-      if (!address) return json({ error: 'Informe o endereço de entrega.' }, 400)
       if (password.length < 6) return json({ error: 'A senha deve ter ao menos 6 caracteres.' }, 400)
 
       const { data: existing } = await admin.from('customers').select('id').ilike('email', email).not('password_hash', 'is', null).maybeSingle()

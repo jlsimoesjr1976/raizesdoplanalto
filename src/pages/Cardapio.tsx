@@ -279,6 +279,7 @@ function AuthDialog({ open, onClose, onAuthed }: { open: boolean; onClose: () =>
 
   async function submit() {
     setError(''); setBusy(true)
+    if (tab === 'signup' && !address.trim()) { setError('Informe o endereço de entrega.'); setBusy(false); return }
     const err = tab === 'login'
       ? await login(email.trim(), password)
       : await signup({ name: name.trim(), email: email.trim(), phone: phone.replace(/\D/g, '') || undefined, address: address.trim(), address_reference: addressRef.trim() || undefined, password })
