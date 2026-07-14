@@ -106,6 +106,21 @@ export function EmitirNotaModal({ open, order, onClose, onEmitted }: Props) {
       setPhase('erro'); setMessage(emit.error); onEmitted(); return
     }
 
+    // 2b) Erro imediato na emissão (4xx ou código de erro sem status de processamento)
+    const emitData = focusData(emit)
+    const emitStatus = String(emitData.status ?? '')
+    const emitErro = (emit.http_status && emit.http_status >= 400) || (emitData.codigo && !emitStatus)
+    if (emitErro) {
+      const msg = String(
+        (emitData.mensagem as string) ||
+        (emitData.erros ? JSON.stringify(emitData.erros) : '') ||
+        (emitData.codigo as string) ||
+        'Erro ao emitir a nota'
+      )
+      await updateInvoice(ref, { status: 'erro', focus_status: (emitData.codigo as string) ?? null, message: msg })
+      setPhase('erro'); setMessage(msg); onEmitted(); return
+    }
+
     // 3) Poll até status final
     let final: FocusResult = emit
     for (let i = 0; i < 6; i++) {
