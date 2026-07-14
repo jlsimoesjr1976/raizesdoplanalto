@@ -48,19 +48,35 @@ function imprimirComanda(order: OrderWithItems, empresa: string) {
     <div class="foot">Documento sem valor fiscal</div>
   </body></html>`
 
-  const w = window.open('', '_blank', 'width=420,height=640')
-  if (!w) {
-    alert('Não foi possível abrir a janela de impressão. Permita pop-ups para este site e tente novamente.')
-    return
+  // Usa um iframe oculto (não depende de pop-up)
+  const iframe = document.createElement('iframe')
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '0'
+  iframe.style.height = '0'
+  iframe.style.border = '0'
+  document.body.appendChild(iframe)
+
+  const cleanup = () => { try { document.body.removeChild(iframe) } catch { /* já removido */ } }
+
+  iframe.onload = () => {
+    const win = iframe.contentWindow
+    if (!win) { cleanup(); return }
+    setTimeout(() => {
+      try { win.focus(); win.print() } catch { /* ignore */ }
+      setTimeout(cleanup, 1500)
+    }, 250)
   }
-  w.document.open()
-  w.document.write(html)
-  w.document.close()
-  w.focus()
-  // Dispara a impressão após o conteúdo renderizar
-  const doPrint = () => { try { w.print() } catch { /* ignore */ } }
-  if (w.document.readyState === 'complete') setTimeout(doPrint, 300)
-  else w.onload = () => setTimeout(doPrint, 200)
+
+  const doc = iframe.contentWindow?.document
+  if (doc) {
+    doc.open()
+    doc.write(html)
+    doc.close()
+  } else {
+    cleanup()
+  }
 }
 
 export function HistoricoConsumo({ customerId }: { customerId: string }) {
