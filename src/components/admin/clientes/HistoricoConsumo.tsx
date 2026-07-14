@@ -46,11 +46,21 @@ function imprimirComanda(order: OrderWithItems, empresa: string) {
     <table>${linhas}</table>
     <div class="total"><span>Total</span><span>${formatCurrency(Number(order.total))}</span></div>
     <div class="foot">Documento sem valor fiscal</div>
-    <script>window.onload = () => { window.print(); }</script>
   </body></html>`
 
   const w = window.open('', '_blank', 'width=420,height=640')
-  if (w) { w.document.write(html); w.document.close() }
+  if (!w) {
+    alert('Não foi possível abrir a janela de impressão. Permita pop-ups para este site e tente novamente.')
+    return
+  }
+  w.document.open()
+  w.document.write(html)
+  w.document.close()
+  w.focus()
+  // Dispara a impressão após o conteúdo renderizar
+  const doPrint = () => { try { w.print() } catch { /* ignore */ } }
+  if (w.document.readyState === 'complete') setTimeout(doPrint, 300)
+  else w.onload = () => setTimeout(doPrint, 200)
 }
 
 export function HistoricoConsumo({ customerId }: { customerId: string }) {
