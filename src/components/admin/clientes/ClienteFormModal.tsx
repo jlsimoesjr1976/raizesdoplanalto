@@ -5,7 +5,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { CheckCircle2, Smartphone, Send, RefreshCw, UserCheck } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { CheckCircle2, Smartphone, Send, RefreshCw, UserCheck, User, Receipt } from 'lucide-react'
+import { HistoricoConsumo } from './HistoricoConsumo'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
 import { sendWhatsAppText, generateVerificationCode } from '@/lib/evolution'
@@ -170,9 +172,64 @@ export function ClienteFormModal({ open, onClose, onSaved, customer, initialName
     setCodeError('')
   }
 
+  const formEl = (
+    <form onSubmit={handleSendCode} className="space-y-4 py-1">
+      <div className="space-y-1.5">
+        <Label>Nome completo *</Label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="João da Silva" autoFocus required />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Celular *</Label>
+        <div className="flex gap-2">
+          <Select value={ddi} onValueChange={setDdi}>
+            <SelectTrigger className="w-36 shrink-0"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {DDI_OPTIONS.map((o) => (<SelectItem key={o.ddi} value={o.ddi}>{o.label}</SelectItem>))}
+            </SelectContent>
+          </Select>
+          <Input value={phone} onChange={(e) => setPhone(applyPhoneMask(e.target.value))} placeholder="(00) 00000-0000" inputMode="tel" required />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {skipValidation
+            ? 'O cliente será cadastrado sem validação por WhatsApp.'
+            : 'Um código será enviado via WhatsApp para validar o número.'}
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Data de nascimento <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+        <Input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} max={new Date().toISOString().split('T')[0]} />
+      </div>
+
+      {isAdmin && (
+        <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+          <div>
+            <p className="text-sm font-medium">Cadastrar sem validação</p>
+            <p className="text-xs text-muted-foreground">Pula o código por WhatsApp (somente admin)</p>
+          </div>
+          <Switch checked={skipValidation} onCheckedChange={setSkipValidation} />
+        </div>
+      )}
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+        <Button type="submit" disabled={sending || saving}>
+          {isAdmin && skipValidation ? (
+            saving ? 'Cadastrando...' : (<><UserCheck className="w-4 h-4 mr-1.5" />Cadastrar</>)
+          ) : (
+            sending ? 'Enviando...' : (<><Send className="w-4 h-4 mr-1.5" />Enviar código</>)
+          )}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className={customer && step === 'form' ? 'max-w-lg' : 'max-w-sm'}>
         <DialogHeader>
           <DialogTitle>
             {step === 'done' ? 'Cliente salvo!' : customer ? 'Editar Cliente' : 'Novo Cliente'}
@@ -188,82 +245,20 @@ export function ClienteFormModal({ open, onClose, onSaved, customer, initialName
           </div>
         )}
 
-        {/* ── Formulário ── */}
+        {/* ── Formulário / Histórico ── */}
         {step === 'form' && (
-          <form onSubmit={handleSendCode} className="space-y-4 py-1">
-            <div className="space-y-1.5">
-              <Label>Nome completo *</Label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="João da Silva"
-                autoFocus
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Celular *</Label>
-              <div className="flex gap-2">
-                <Select value={ddi} onValueChange={setDdi}>
-                  <SelectTrigger className="w-36 shrink-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DDI_OPTIONS.map((o) => (
-                      <SelectItem key={o.ddi} value={o.ddi}>{o.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  value={phone}
-                  onChange={(e) => setPhone(applyPhoneMask(e.target.value))}
-                  placeholder="(00) 00000-0000"
-                  inputMode="tel"
-                  required
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {skipValidation
-                  ? 'O cliente será cadastrado sem validação por WhatsApp.'
-                  : 'Um código será enviado via WhatsApp para validar o número.'}
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Data de nascimento <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-              <Input
-                type="date"
-                value={birthday}
-                onChange={(e) => setBirthday(e.target.value)}
-                max={new Date().toISOString().split('T')[0]}
-              />
-            </div>
-
-            {/* Opção do administrador: cadastro direto */}
-            {isAdmin && (
-              <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
-                <div>
-                  <p className="text-sm font-medium">Cadastrar sem validação</p>
-                  <p className="text-xs text-muted-foreground">Pula o código por WhatsApp (somente admin)</p>
-                </div>
-                <Switch checked={skipValidation} onCheckedChange={setSkipValidation} />
-              </div>
-            )}
-
-            {error && <p className="text-sm text-destructive">{error}</p>}
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button type="submit" disabled={sending || saving}>
-                {isAdmin && skipValidation ? (
-                  saving ? 'Cadastrando...' : (<><UserCheck className="w-4 h-4 mr-1.5" />Cadastrar</>)
-                ) : (
-                  sending ? 'Enviando...' : (<><Send className="w-4 h-4 mr-1.5" />Enviar código</>)
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
+          customer ? (
+            <Tabs defaultValue="dados">
+              <TabsList className="grid grid-cols-2 mb-3">
+                <TabsTrigger value="dados" className="gap-1.5"><User className="w-4 h-4" />Dados</TabsTrigger>
+                <TabsTrigger value="historico" className="gap-1.5"><Receipt className="w-4 h-4" />Histórico</TabsTrigger>
+              </TabsList>
+              <TabsContent value="dados">{formEl}</TabsContent>
+              <TabsContent value="historico">
+                <HistoricoConsumo customerId={customer.id} />
+              </TabsContent>
+            </Tabs>
+          ) : formEl
         )}
 
         {/* ── Verificação ── */}
