@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
-import { Category, Product } from '@/types/database'
+import { Category, Product, PrepStation } from '@/types/database'
 import { formatCurrency } from '@/lib/utils'
 import { ProdutoFormModal } from './ProdutoFormModal'
 import { FichaTecnicaModal } from './FichaTecnicaModal'
@@ -40,6 +40,33 @@ function categoryColor(categoryId: string | null, categories: Category[]): strin
 
 type ProductWithCategory = Product & { categories?: Category }
 
+const PREP_STATION_UI: Record<'na' | 'bar' | 'cozinha', { label: string; className: string }> = {
+  na:      { label: 'N/A',     className: 'bg-muted text-muted-foreground hover:bg-muted/80' },
+  bar:     { label: 'Bar',     className: 'bg-purple-100 text-purple-800 hover:bg-purple-200' },
+  cozinha: { label: 'Cozinha', className: 'bg-amber-100 text-amber-800 hover:bg-amber-200' },
+}
+
+/** Ciclo do botão: N/A → Bar → Cozinha → N/A */
+function nextPrepStation(cur: PrepStation): PrepStation {
+  if (cur === null) return 'bar'
+  if (cur === 'bar') return 'cozinha'
+  return null
+}
+
+function PrepStationButton({ station, onCycle }: { station: PrepStation; onCycle: () => void }) {
+  const ui = PREP_STATION_UI[station ?? 'na']
+  return (
+    <button
+      type="button"
+      title="Definir fila de preparo (clique para alternar)"
+      onClick={(e) => { e.stopPropagation(); onCycle() }}
+      className={cn('text-xs font-medium px-2 py-0.5 rounded-full transition-colors', ui.className)}
+    >
+      {ui.label}
+    </button>
+  )
+}
+
 async function uploadProductImage(productId: string, file: File): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
   const filename = `${productId}-${Date.now()}.${ext}`
@@ -56,12 +83,13 @@ interface ProductCardProps {
   onFicha: () => void
   onDuplicate: () => void
   onDelete: () => void
+  onCyclePrep: () => void
   duplicating: boolean
   deleting: boolean
   onImageUpdated: () => void
 }
 
-function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, duplicating, deleting, onImageUpdated }: ProductCardProps) {
+function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, duplicating, deleting, onImageUpdated }: ProductCardProps) {
   const [uploading, setUploading] = useState(false)
   const [localImage, setLocalImage] = useState<string | null>(p.image_url ?? null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -122,9 +150,12 @@ function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onD
               </span>
             )}
           </div>
-          <Badge variant={p.active ? 'default' : 'secondary'} className="shrink-0 text-xs">
-            {p.active ? 'Ativo' : 'Inativo'}
-          </Badge>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <Badge variant={p.active ? 'default' : 'secondary'} className="text-xs">
+              {p.active ? 'Ativo' : 'Inativo'}
+            </Badge>
+            <PrepStationButton station={p.prep_station} onCycle={onCyclePrep} />
+          </div>
         </div>
 
         {p.description && (
@@ -170,11 +201,12 @@ interface ProductRowProps {
   onFicha: () => void
   onDuplicate: () => void
   onDelete: () => void
+  onCyclePrep: () => void
   duplicating: boolean
   deleting: boolean
 }
 
-function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, duplicating, deleting }: ProductRowProps) {
+function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, duplicating, deleting }: ProductRowProps) {
   return (
     <div className="flex items-center gap-3 p-2.5 rounded-lg border bg-card hover:shadow-sm transition-shadow">
       <div className="w-11 h-11 rounded-md bg-muted overflow-hidden shrink-0 flex items-center justify-center">
@@ -191,6 +223,7 @@ function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDe
             </span>
           )}
           {!p.active && <Badge variant="secondary" className="text-[10px]">Inativo</Badge>}
+          <PrepStationButton station={p.prep_station} onCycle={onCyclePrep} />
         </div>
         <div className={cn('text-xs mt-0.5 flex items-center gap-1',
           p.stock_quantity <= 0 ? 'text-red-600' : p.stock_quantity <= 5 ? 'text-amber-600' : 'text-muted-foreground')}>
@@ -260,6 +293,24 @@ export function ProdutosTab() {
       if (error) throw error
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
+  })
+
+  const prepMutation = useMutation({
+    mutationFn: async ({ id, station }: { id: string; station: PrepStation }) => {
+      const { error } = await supabase.from('products').update({ prep_station: station }).eq('id', id)
+      if (error) throw error
+    },
+    onMutate: async ({ id, station }) => {
+      await queryClient.cancelQueries({ queryKey: ['products'] })
+      const prev = queryClient.getQueryData<ProductWithCategory[]>(['products'])
+      queryClient.setQueryData<ProductWithCategory[]>(['products'], (old) =>
+        (old ?? []).map((p) => (p.id === id ? { ...p, prep_station: station } : p)))
+      return { prev }
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['products'], ctx.prev)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
   })
 
   const handleDelete = (p: ProductWithCategory) => {
@@ -399,6 +450,7 @@ export function ProdutosTab() {
               onFicha={() => openFicha(p)}
               onDuplicate={() => duplicateMutation.mutate(p)}
               onDelete={() => handleDelete(p)}
+              onCyclePrep={() => prepMutation.mutate({ id: p.id, station: nextPrepStation(p.prep_station) })}
               duplicating={duplicateMutation.isPending}
               deleting={deleteMutation.isPending}
               onImageUpdated={() => queryClient.invalidateQueries({ queryKey: ['products'] })}
@@ -419,6 +471,7 @@ export function ProdutosTab() {
               onFicha={() => openFicha(p)}
               onDuplicate={() => duplicateMutation.mutate(p)}
               onDelete={() => handleDelete(p)}
+              onCyclePrep={() => prepMutation.mutate({ id: p.id, station: nextPrepStation(p.prep_station) })}
               duplicating={duplicateMutation.isPending}
               deleting={deleteMutation.isPending}
             />

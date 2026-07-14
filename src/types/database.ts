@@ -49,9 +49,12 @@ export interface Product {
   has_ingredients: boolean
   active: boolean
   sort_order: number
+  prep_station: PrepStation
   created_at: string
   categories?: Category
 }
+
+export type PrepStation = 'bar' | 'cozinha' | null
 
 export interface ProductIngredient {
   product_id: string
