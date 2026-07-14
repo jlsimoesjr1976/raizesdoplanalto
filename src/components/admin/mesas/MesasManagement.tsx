@@ -4,8 +4,9 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   Plus, Table2, Users, Clock, ChefHat,
-  MoreVertical, CheckCircle2, Pencil, Trash2, RotateCcw, User,
+  MoreVertical, CheckCircle2, Pencil, Trash2, RotateCcw, User, Printer,
 } from 'lucide-react'
+import { imprimirComanda } from '@/lib/printComanda'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -313,9 +314,29 @@ function MesaCard({ table, onOpen, onEdit, onDelete, onReserve, onFree }: MesaCa
               <span className="text-xs text-muted-foreground">
                 {order.order_items?.length ?? 0} item{(order.order_items?.length ?? 0) !== 1 ? 's' : ''}
               </span>
-              <span className="text-sm font-bold text-amber-700">
-                {formatCurrency(order.total)}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  title="Imprimir comanda"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    imprimirComanda({
+                      numero: table.number,
+                      cliente: order.customer_name,
+                      data: order.created_at,
+                      aberta: true,
+                      items: (order.order_items ?? []).map((i) => ({ quantity: i.quantity, product_name: i.product_name, unit_price: i.unit_price })),
+                      total: Number(order.total),
+                    })
+                  }}
+                  disabled={(order.order_items?.length ?? 0) === 0}
+                  className="text-muted-foreground hover:text-amber-700 disabled:opacity-40 transition-colors"
+                >
+                  <Printer className="w-4 h-4" />
+                </button>
+                <span className="text-sm font-bold text-amber-700">
+                  {formatCurrency(order.total)}
+                </span>
+              </div>
             </div>
           </div>
         )}
