@@ -210,7 +210,8 @@ export default function AdminDashboard() {
         </div>
 
         <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
-          {queueVisible && (
+          {/* Fila de Preparos logo abaixo do Dashboard (ou no topo se não houver Dashboard) */}
+          {queueVisible && !topItems.some((i) => i.id === 'dashboard') && (
             <NavButton
               item={QUEUE_ITEM}
               active={activeTab === 'queue'}
@@ -219,12 +220,20 @@ export default function AdminDashboard() {
           )}
 
           {topItems.map((item) => (
-            <NavButton
-              key={item.id}
-              item={item}
-              active={activeTab === item.id}
-              onClick={() => { setActiveTab(item.id); setSidebarOpen(false) }}
-            />
+            <div key={item.id} className="space-y-1">
+              <NavButton
+                item={item}
+                active={activeTab === item.id}
+                onClick={() => { setActiveTab(item.id); setSidebarOpen(false) }}
+              />
+              {queueVisible && item.id === 'dashboard' && (
+                <NavButton
+                  item={QUEUE_ITEM}
+                  active={activeTab === 'queue'}
+                  onClick={() => { setActiveTab('queue'); setSidebarOpen(false) }}
+                />
+              )}
+            </div>
           ))}
 
           {/* Grupo Cadastros (colapsável) — só se houver itens permitidos */}
