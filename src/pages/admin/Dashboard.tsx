@@ -37,6 +37,7 @@ import { MarketingManagement } from '@/components/admin/marketing/MarketingManag
 import { NotasFiscaisManagement } from '@/components/admin/notas/NotasFiscaisManagement'
 import { UsuariosManagement } from '@/components/admin/usuarios/UsuariosManagement'
 import { FilaPreparoManagement } from '@/components/admin/preparo/FilaPreparoManagement'
+import { PedidosManagement } from '@/components/admin/pedidos/PedidosManagement'
 import { DashboardOverview } from '@/components/admin/DashboardOverview'
 import { ShieldCheck, ChefHat } from 'lucide-react'
 import { ROLE_LABELS, type Role } from '@/types/database'
@@ -167,6 +168,7 @@ export default function AdminDashboard() {
     if (activeTab === 'dashboard') return <DashboardOverview />
     if (activeTab === 'stock') return <InsumosManagement />
     if (activeTab === 'menu') return <CardapioManagement />
+    if (activeTab === 'orders') return <PedidosManagement />
     if (activeTab === 'tables') return <MesasManagement />
     if (activeTab === 'customers') return <ClientesManagement />
     if (activeTab === 'freelancers') return <FreelancersManagement />

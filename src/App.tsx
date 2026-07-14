@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster'
 import Login from '@/pages/Login'
 import NotFound from '@/pages/NotFound'
 import AdminDashboard from '@/pages/admin/Dashboard'
+import Cardapio from '@/pages/Cardapio'
 import type { Role } from '@/types/database'
 
 const queryClient = new QueryClient({
@@ -52,6 +53,8 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* Cardápio público para clientes (independente do login de staff) */}
+      <Route path="/cardapio" element={<Cardapio />} />
       <Route
         path="/"
         element={
