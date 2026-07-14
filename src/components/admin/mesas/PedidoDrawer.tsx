@@ -93,6 +93,11 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
     }))
     await supabase.from('order_items').insert(rows)
 
+    // Baixa do estoque (todos os itens lançados, independente da fila de preparo)
+    await Promise.all(items.map((i) =>
+      supabase.rpc('adjust_product_stock', { p_product_id: i.product.id, p_delta: -i.quantity })
+    ))
+
     // Notifica o cliente pelo WhatsApp (itens lançados)
     if (order?.customer_phone) {
       notifyItensLancados(order.customer_phone, order.table_number ?? '', items.map((i) => ({
@@ -115,7 +120,16 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
   }
 
   async function handleRemoveItem(item: OrderItem) {
+    const devolver = window.confirm(
+      `Excluir ${item.quantity}x ${item.product_name}.\n\nDeseja devolver este item ao estoque?\n\nOK = devolver ao estoque\nCancelar = não devolver`
+    )
+
     await supabase.from('order_items').delete().eq('id', item.id)
+
+    // Devolve ao estoque se o usuário confirmou
+    if (devolver && item.product_id) {
+      await supabase.rpc('adjust_product_stock', { p_product_id: item.product_id, p_delta: item.quantity })
+    }
 
     // Notifica o cliente pelo WhatsApp (item removido)
     if (order?.customer_phone) {
