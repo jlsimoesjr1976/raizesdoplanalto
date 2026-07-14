@@ -16,7 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, ClipboardList, UtensilsCrossed, Package, AlertTriangle, Copy, Camera, Loader2, FileSpreadsheet } from 'lucide-react'
+import { Plus, Pencil, Trash2, ClipboardList, UtensilsCrossed, Package, AlertTriangle, Copy, Camera, Loader2, FileSpreadsheet, LayoutGrid, List } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { ImportXlsxModal } from './ImportXlsxModal'
 import { produtosImportConfig } from '@/lib/importConfigs'
 
@@ -162,8 +163,65 @@ function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onD
   )
 }
 
+interface ProductRowProps {
+  product: ProductWithCategory
+  categories: Category[]
+  onEdit: () => void
+  onFicha: () => void
+  onDuplicate: () => void
+  onDelete: () => void
+  duplicating: boolean
+  deleting: boolean
+}
+
+function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, duplicating, deleting }: ProductRowProps) {
+  return (
+    <div className="flex items-center gap-3 p-2.5 rounded-lg border bg-card hover:shadow-sm transition-shadow">
+      <div className="w-11 h-11 rounded-md bg-muted overflow-hidden shrink-0 flex items-center justify-center">
+        {p.image_url
+          ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+          : <UtensilsCrossed className="w-5 h-5 text-muted-foreground/40" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-medium truncate">{p.name}</span>
+          {p.categories && (
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${categoryColor(p.category_id, categories)}`}>
+              {p.categories.name}
+            </span>
+          )}
+          {!p.active && <Badge variant="secondary" className="text-[10px]">Inativo</Badge>}
+        </div>
+        <div className={cn('text-xs mt-0.5 flex items-center gap-1',
+          p.stock_quantity <= 0 ? 'text-red-600' : p.stock_quantity <= 5 ? 'text-amber-600' : 'text-muted-foreground')}>
+          {p.stock_quantity <= 0 ? <AlertTriangle className="w-3 h-3" /> : <Package className="w-3 h-3" />}
+          {p.stock_quantity <= 0 ? 'Sem estoque' : `${p.stock_quantity} un`}
+        </div>
+      </div>
+      <span className="font-bold text-green-600 shrink-0 tabular-nums">{formatCurrency(p.price)}</span>
+      <div className="flex gap-1.5 shrink-0">
+        <Button size="sm" variant="outline" title="Editar" onClick={onEdit}>
+          <Pencil className="w-3.5 h-3.5" />
+        </Button>
+        <Button size="sm" variant="outline" title="Ficha Técnica" onClick={onFicha}>
+          <ClipboardList className="w-3.5 h-3.5" />
+        </Button>
+        <Button size="sm" variant="outline" title="Duplicar produto" onClick={onDuplicate} disabled={duplicating}>
+          <Copy className="w-3.5 h-3.5" />
+        </Button>
+        <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" title="Excluir" onClick={onDelete} disabled={deleting}>
+          <Trash2 className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+type ViewMode = 'grid' | 'list'
+
 export function ProdutosTab() {
   const queryClient = useQueryClient()
+  const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('produtos-view') as ViewMode) || 'grid')
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [editProduct, setEditProduct] = useState<ProductWithCategory | null>(null)
@@ -241,12 +299,33 @@ export function ProdutosTab() {
     setFichaOpen(true)
   }
 
+  const changeView = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem('produtos-view', mode)
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="text-lg font-semibold">Produtos</h2>
         <div className="flex gap-2">
+          <div className="flex rounded-md border overflow-hidden">
+            <button
+              title="Visualização em grade"
+              onClick={() => changeView('grid')}
+              className={cn('px-2.5 flex items-center', viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              title="Visualização em lista"
+              onClick={() => changeView('list')}
+              className={cn('px-2.5 flex items-center border-l', viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
           <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
             <FileSpreadsheet className="w-4 h-4 mr-1" />
             Importar
@@ -309,7 +388,7 @@ export function ProdutosTab() {
       )}
 
       {/* Grid */}
-      {!loadingProducts && filtered.length > 0 && (
+      {!loadingProducts && filtered.length > 0 && viewMode === 'grid' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map((p) => (
             <ProductCard
@@ -323,6 +402,25 @@ export function ProdutosTab() {
               duplicating={duplicateMutation.isPending}
               deleting={deleteMutation.isPending}
               onImageUpdated={() => queryClient.invalidateQueries({ queryKey: ['products'] })}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Lista */}
+      {!loadingProducts && filtered.length > 0 && viewMode === 'list' && (
+        <div className="space-y-2">
+          {filtered.map((p) => (
+            <ProductRow
+              key={p.id}
+              product={p}
+              categories={categories}
+              onEdit={() => openEdit(p)}
+              onFicha={() => openFicha(p)}
+              onDuplicate={() => duplicateMutation.mutate(p)}
+              onDelete={() => handleDelete(p)}
+              duplicating={duplicateMutation.isPending}
+              deleting={deleteMutation.isPending}
             />
           ))}
         </div>
