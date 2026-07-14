@@ -48,7 +48,7 @@ export function AbrirMesaModal({ open, onClose, onOpened, table }: Props) {
       .from('profiles')
       .select('*')
       .eq('active', true)
-      .in('role', ['admin', 'waiter'])
+      .in('role', ['admin', 'atendente'])
       .order('name')
     setWaiters(data ?? [])
   }

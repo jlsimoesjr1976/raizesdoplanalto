@@ -16,11 +16,8 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  function getRoleRoute(r: string | null) {
-    if (r === 'admin') return '/admin'
-    if (r === 'waiter') return '/waiter'
-    if (r === 'kitchen') return '/kitchen'
-    return '/login'
+  function getRoleRoute(_r: string | null) {
+    return '/admin'
   }
 
   async function handleSubmit(e: FormEvent) {

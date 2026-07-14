@@ -8,8 +8,6 @@ interface AuthContextValue {
   profile: Profile | null
   role: Role | null
   isAdmin: boolean
-  isWaiter: boolean
-  isKitchen: boolean
   isLoading: boolean
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
@@ -57,8 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, profile, role,
       isAdmin: role === 'admin',
-      isWaiter: role === 'waiter',
-      isKitchen: role === 'kitchen',
       isLoading, signIn, signOut,
     }}>
       {children}

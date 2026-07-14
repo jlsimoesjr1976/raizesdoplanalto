@@ -5,8 +5,6 @@ import { Toaster } from '@/components/ui/toaster'
 import Login from '@/pages/Login'
 import NotFound from '@/pages/NotFound'
 import AdminDashboard from '@/pages/admin/Dashboard'
-import WaiterDashboard from '@/pages/waiter/WaiterDashboard'
-import KitchenDisplay from '@/pages/kitchen/KitchenDisplay'
 import type { Role } from '@/types/database'
 
 const queryClient = new QueryClient({
@@ -18,20 +16,13 @@ const queryClient = new QueryClient({
   },
 })
 
-function getRoleRoute(role: Role): string {
-  if (role === 'admin') return '/admin'
-  if (role === 'waiter') return '/waiter'
-  if (role === 'kitchen') return '/kitchen'
-  return '/login'
+function getRoleRoute(_role: Role): string {
+  // Todos os níveis usam o mesmo shell; o menu é filtrado por papel.
+  return '/admin'
 }
 
-interface ProtectedRouteProps {
-  children: React.ReactNode
-  requiredRole: Role
-}
-
-function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const { user, role, isLoading } = useAuth()
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth()
 
   if (isLoading) {
     return (
@@ -44,14 +35,7 @@ function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
     )
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />
-  }
-
-  if (role && role !== requiredRole) {
-    return <Navigate to={getRoleRoute(role)} replace />
-  }
-
+  if (!user) return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
@@ -83,27 +67,13 @@ function AppRoutes() {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute requiredRole="admin">
+          <ProtectedRoute>
             <AdminDashboard />
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/waiter"
-        element={
-          <ProtectedRoute requiredRole="waiter">
-            <WaiterDashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/kitchen"
-        element={
-          <ProtectedRoute requiredRole="kitchen">
-            <KitchenDisplay />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/waiter" element={<Navigate to="/admin" replace />} />
+      <Route path="/kitchen" element={<Navigate to="/admin" replace />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   )

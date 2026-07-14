@@ -9,6 +9,7 @@ import {
   Users, UserCheck, Receipt, CircleDollarSign, Pencil, Check, User, Phone,
 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/contexts/AuthContext'
 import { formatCurrency } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { AdicionarItemModal } from './AdicionarItemModal'
@@ -31,6 +32,8 @@ interface Props {
 }
 
 export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
+  const { role } = useAuth()
+  const podeExcluirItem = role !== 'atendente'
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(false)
   const [showAddItem, setShowAddItem] = useState(false)
@@ -264,7 +267,7 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
                         </span>
                       </div>
                     </div>
-                    {order?.status === 'open' && item.kitchen_status === 'pending' && (
+                    {podeExcluirItem && order?.status === 'open' && item.kitchen_status === 'pending' && (
                       <button
                         onClick={() => handleRemoveItem(item)}
                         className="text-muted-foreground hover:text-destructive transition-colors mt-0.5"

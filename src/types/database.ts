@@ -1,4 +1,12 @@
-export type Role = 'admin' | 'waiter' | 'kitchen'
+export type Role = 'admin' | 'atendente' | 'cozinha' | 'bar' | 'caixa'
+
+export const ROLE_LABELS: Record<Role, string> = {
+  admin: 'Administrador',
+  atendente: 'Atendente',
+  cozinha: 'Cozinha',
+  bar: 'Bar',
+  caixa: 'Caixa',
+}
 export type TableStatus = 'free' | 'occupied' | 'reserved'
 export type OrderStatus = 'open' | 'paid' | 'cancelled'
 export type KitchenStatus = 'pending' | 'preparing' | 'ready' | 'delivered'
@@ -8,6 +16,8 @@ export interface Profile {
   id: string
   name: string
   role: Role
+  phone: string | null
+  email: string | null
   active: boolean
   created_at: string
 }
