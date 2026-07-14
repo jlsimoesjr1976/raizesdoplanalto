@@ -20,6 +20,7 @@ import {
   LogOut,
   FolderPlus,
   ChevronDown,
+  ReceiptText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import logoImg from '@/assets/logo.png'
@@ -33,6 +34,7 @@ import { FinanceiroManagement } from '@/components/admin/financeiro/FinanceiroMa
 import { FornecedoresManagement } from '@/components/admin/fornecedores/FornecedoresManagement'
 import { FuncionariosManagement } from '@/components/admin/funcionarios/FuncionariosManagement'
 import { MarketingManagement } from '@/components/admin/marketing/MarketingManagement'
+import { NotasFiscaisManagement } from '@/components/admin/notas/NotasFiscaisManagement'
 import { DashboardOverview } from '@/components/admin/DashboardOverview'
 
 type Tab =
@@ -46,6 +48,7 @@ type Tab =
   | 'suppliers'
   | 'employees'
   | 'finance'
+  | 'invoices'
   | 'marketing'
   | 'settings'
 
@@ -71,6 +74,7 @@ const NAV_CADASTROS: NavItem[] = [
 // Itens após o grupo Cadastros
 const NAV_BOTTOM: NavItem[] = [
   { id: 'finance', label: 'Financeiro', icon: Wallet },
+  { id: 'invoices', label: 'Notas Fiscais', icon: ReceiptText },
   { id: 'marketing', label: 'Marketing', icon: Megaphone },
   { id: 'settings', label: 'Configurações', icon: Settings },
 ]
@@ -125,6 +129,7 @@ export default function AdminDashboard() {
     if (activeTab === 'suppliers') return <FornecedoresManagement />
     if (activeTab === 'employees') return <FuncionariosManagement />
     if (activeTab === 'finance') return <FinanceiroManagement />
+    if (activeTab === 'invoices') return <NotasFiscaisManagement />
     if (activeTab === 'marketing') return <MarketingManagement />
     if (activeTab === 'settings') return <ConfiguracoesManagement />
     return <PlaceholderTab icon={activeItem.icon} label={activeItem.label} />

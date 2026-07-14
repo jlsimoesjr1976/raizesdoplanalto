@@ -214,6 +214,26 @@ export interface FinancialEntry {
 
 export type SettlementMethod = 'pix' | 'boleto' | 'credito' | 'debito' | 'dinheiro'
 
+export interface Invoice {
+  id: string
+  order_id: string | null
+  ref: string
+  environment: string
+  status: 'processando' | 'autorizado' | 'erro' | 'cancelado'
+  cpf: string | null
+  customer_name: string | null
+  amount: number
+  focus_status: string | null
+  numero: string | null
+  serie: string | null
+  chave: string | null
+  danfe_url: string | null
+  xml_url: string | null
+  message: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface BroadcastList {
   id: string
   name: string
