@@ -8,7 +8,7 @@ interface CustomerCtx {
   token: string | null
   loading: boolean
   login: (email: string, password: string) => Promise<string | null>
-  signup: (input: { name: string; email: string; phone?: string; password: string }) => Promise<string | null>
+  signup: (input: { name: string; email: string; phone?: string; address: string; address_reference?: string; password: string }) => Promise<string | null>
   logout: () => void
 }
 

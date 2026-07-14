@@ -5,6 +5,8 @@ export interface CustomerAccount {
   name: string
   email: string | null
   phone: string | null
+  address: string | null
+  address_reference: string | null
 }
 
 export interface CartLine {
@@ -30,7 +32,7 @@ async function callAuth(body: Record<string, unknown>): Promise<AuthResult> {
   return data as AuthResult
 }
 
-export function customerSignup(input: { name: string; email: string; phone?: string; password: string }) {
+export function customerSignup(input: { name: string; email: string; phone?: string; address: string; address_reference?: string; password: string }) {
   return callAuth({ action: 'signup', ...input })
 }
 export function customerLogin(input: { email: string; password: string }) {

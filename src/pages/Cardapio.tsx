@@ -43,6 +43,14 @@ function CardapioInner() {
       return (data ?? []) as Product[]
     },
   })
+  const { data: lojaAberta = true } = useQuery({
+    queryKey: ['pub-loja-aberta'],
+    refetchInterval: 30000,
+    queryFn: async () => {
+      const { data } = await supabase.from('settings').select('value').eq('key', 'loja_aberta').maybeSingle()
+      return data ? data.value !== false : true
+    },
+  })
 
   const filtered = useMemo(() => products.filter((p) => {
     const mc = activeCat === 'all' || p.category_id === activeCat
@@ -69,6 +77,7 @@ function CardapioInner() {
 
   function handleFinalizar() {
     if (cart.length === 0) return
+    if (!lojaAberta) { alert('A loja está fechada para pedidos no momento.'); return }
     if (!customer || !token) { pendingFinalize.current = true; setAuthOpen(true); return }
     void doPlaceOrder(token)
   }
@@ -115,6 +124,12 @@ function CardapioInner() {
           </button>
         </div>
       </header>
+
+      {!lojaAberta && (
+        <div className="bg-red-600 text-white text-center text-sm font-medium py-2 px-4">
+          🔴 Loja fechada no momento — você pode ver o cardápio, mas não é possível fazer pedidos agora.
+        </div>
+      )}
 
       {/* Categorias (topo) + busca */}
       <div className="sticky top-[60px] z-10 bg-neutral-50/95 backdrop-blur border-b">
@@ -255,6 +270,8 @@ function AuthDialog({ open, onClose, onAuthed }: { open: boolean; onClose: () =>
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [address, setAddress] = useState('')
+  const [addressRef, setAddressRef] = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -264,7 +281,7 @@ function AuthDialog({ open, onClose, onAuthed }: { open: boolean; onClose: () =>
     setError(''); setBusy(true)
     const err = tab === 'login'
       ? await login(email.trim(), password)
-      : await signup({ name: name.trim(), email: email.trim(), phone: phone.replace(/\D/g, '') || undefined, password })
+      : await signup({ name: name.trim(), email: email.trim(), phone: phone.replace(/\D/g, '') || undefined, address: address.trim(), address_reference: addressRef.trim() || undefined, password })
     setBusy(false)
     if (err) { setError(err); return }
     onAuthed()
@@ -282,6 +299,8 @@ function AuthDialog({ open, onClose, onAuthed }: { open: boolean; onClose: () =>
           <TabsContent value="signup" className="space-y-3 pt-3">
             <div className="space-y-1.5"><Label>Nome *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" /></div>
             <div className="space-y-1.5"><Label>Telefone (WhatsApp)</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000" inputMode="tel" /></div>
+            <div className="space-y-1.5"><Label>Endereço de entrega *</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Rua, número, bairro" /></div>
+            <div className="space-y-1.5"><Label>Ponto de referência</Label><Input value={addressRef} onChange={(e) => setAddressRef(e.target.value)} placeholder="Ex.: próximo à praça" /></div>
           </TabsContent>
           <div className="space-y-3 pt-3">
             <div className="space-y-1.5"><Label>E-mail *</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" /></div>

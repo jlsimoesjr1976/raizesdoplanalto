@@ -92,6 +92,23 @@ export async function notifyPedidoProntoAtendente(
   await sendWhatsAppRaw(d, text)
 }
 
+/** Pedido online — mudança de status de entrega */
+export async function notifyPedidoStatus(
+  phoneRaw: string | null | undefined,
+  name: string | null,
+  numero: number | string,
+  status: 'preparando' | 'saiu_entrega' | 'entregue'
+) {
+  const d = digits(phoneRaw)
+  if (!d) return
+  const msgs: Record<typeof status, string> = {
+    preparando: `👨‍🍳 *Pedido #${numero}*\n\n${firstName(name)}, seu pedido *começou a ser preparado*! Já já sai para entrega. 😉`,
+    saiu_entrega: `🛵 *Pedido #${numero}*\n\n${firstName(name)}, seu pedido *saiu para entrega*! Logo chega até você. 🚀`,
+    entregue: `✅ *Pedido #${numero}*\n\n${firstName(name)}, seu pedido foi *entregue*. Bom apetite e obrigado pela preferência! 💚`,
+  }
+  await sendWhatsAppRaw(d, msgs[status])
+}
+
 /** Pagamento efetuado / comanda fechada */
 export async function notifyPagamento(
   phoneRaw: string | null | undefined,

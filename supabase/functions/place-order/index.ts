@@ -23,11 +23,15 @@ Deno.serve(async (req) => {
     if (!token) return json({ error: 'Sessão inválida. Faça login novamente.' }, 401)
     if (!Array.isArray(items) || items.length === 0) return json({ error: 'Carrinho vazio.' }, 400)
 
+    // Loja aberta?
+    const { data: statusRow } = await admin.from('settings').select('value').eq('key', 'loja_aberta').maybeSingle()
+    if (statusRow && statusRow.value === false) return json({ error: 'A loja está fechada para pedidos no momento.' }, 409)
+
     // Valida sessão
     const { data: sess } = await admin.from('customer_sessions').select('customer_id, expires_at').eq('token', token).maybeSingle()
     if (!sess || new Date(sess.expires_at).getTime() < Date.now()) return json({ error: 'Sessão expirada. Faça login novamente.' }, 401)
 
-    const { data: customer } = await admin.from('customers').select('id, name, phone').eq('id', sess.customer_id).single()
+    const { data: customer } = await admin.from('customers').select('id, name, phone, address, address_reference').eq('id', sess.customer_id).single()
     if (!customer) return json({ error: 'Cliente não encontrado.' }, 404)
 
     // Carrega os produtos do carrinho a partir do banco (fonte da verdade)
@@ -58,6 +62,9 @@ Deno.serve(async (req) => {
       customer_id: customer.id,
       customer_name: customer.name,
       customer_phone: customer.phone,
+      delivery_address: customer.address ?? null,
+      delivery_reference: customer.address_reference ?? null,
+      delivery_status: 'recebido',
       people_count: 1,
       total,
       notes: notes?.trim() || null,

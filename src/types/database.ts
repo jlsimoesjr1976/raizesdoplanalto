@@ -107,6 +107,10 @@ export interface Order {
   notes: string | null
   total: number
   mp_payment_ids: string[]
+  order_type: 'comanda' | 'pedido'
+  delivery_address: string | null
+  delivery_reference: string | null
+  delivery_status: 'recebido' | 'preparando' | 'saiu_entrega' | 'entregue'
   created_at: string
   closed_at: string | null
   tables?: Table

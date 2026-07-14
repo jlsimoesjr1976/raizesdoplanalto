@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -63,7 +64,7 @@ type Tab =
 const ROLE_TABS: Record<Role, Tab[] | 'all'> = {
   admin: 'all',
   atendente: ['tables', 'customers'],
-  caixa: ['tables', 'invoices', 'marketing'],
+  caixa: ['orders', 'tables', 'invoices', 'marketing'],
   cozinha: ['queue'],
   bar: ['queue'],
 }
@@ -106,7 +107,7 @@ function canAccess(role: Role | null, tab: Tab): boolean {
   return allowed === 'all' || allowed.includes(tab)
 }
 
-function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
+function NavButton({ item, active, onClick, badge }: { item: NavItem; active: boolean; onClick: () => void; badge?: number }) {
   return (
     <button
       onClick={onClick}
@@ -118,7 +119,12 @@ function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; 
       )}
     >
       <item.icon className="w-4 h-4 shrink-0" />
-      {item.label}
+      <span className="flex-1 text-left">{item.label}</span>
+      {!!badge && badge > 0 && (
+        <span className="min-w-5 h-5 px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center animate-pulse">
+          {badge}
+        </span>
+      )}
     </button>
   )
 }
@@ -135,10 +141,60 @@ function PlaceholderTab({ icon: Icon, label }: { icon: React.ElementType; label:
   )
 }
 
+function playNewOrderChime() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    const ac = new Ctx()
+    const notes = [880, 1174.66] // A5, D6
+    notes.forEach((freq, idx) => {
+      const osc = ac.createOscillator()
+      const gain = ac.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      const start = ac.currentTime + idx * 0.18
+      gain.gain.setValueAtTime(0.0001, start)
+      gain.gain.exponentialRampToValueAtTime(0.3, start + 0.03)
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35)
+      osc.connect(gain); gain.connect(ac.destination)
+      osc.start(start); osc.stop(start + 0.4)
+    })
+    setTimeout(() => ac.close(), 1200)
+  } catch { /* som indisponível */ }
+}
+
 export default function AdminDashboard() {
   const { profile, role, signOut } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cadastrosOpen, setCadastrosOpen] = useState(false)
+  const [pedidosPendentes, setPedidosPendentes] = useState(0)
+  const prevPedidos = useRef<number | null>(null)
+
+  const canSeePedidos = canAccess(role, 'orders')
+
+  const loadPedidosCount = useCallback(async () => {
+    const { count } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('order_type', 'pedido')
+      .eq('status', 'open')
+      .eq('delivery_status', 'recebido')
+    const n = count ?? 0
+    setPedidosPendentes((prev) => {
+      if (prevPedidos.current !== null && n > prevPedidos.current) playNewOrderChime()
+      prevPedidos.current = n
+      return n === prev ? prev : n
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!canSeePedidos) return
+    loadPedidosCount()
+    const ch = supabase
+      .channel('dash-pedidos-count')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => loadPedidosCount())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [canSeePedidos, loadPedidosCount])
 
   // Menus filtrados pelo nível de acesso
   const topItems = NAV_TOP.filter((i) => canAccess(role, i.id))
@@ -226,6 +282,7 @@ export default function AdminDashboard() {
               <NavButton
                 item={item}
                 active={activeTab === item.id}
+                badge={item.id === 'orders' ? pedidosPendentes : undefined}
                 onClick={() => { setActiveTab(item.id); setSidebarOpen(false) }}
               />
               {queueVisible && item.id === 'dashboard' && (

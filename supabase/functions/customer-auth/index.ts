@@ -53,9 +53,11 @@ async function createSession(customerId: string): Promise<string> {
   return token
 }
 
-function publicCustomer(c: { id: string; name: string; email: string | null; phone: string | null }) {
-  return { id: c.id, name: c.name, email: c.email, phone: c.phone }
+function publicCustomer(c: { id: string; name: string; email: string | null; phone: string | null; address?: string | null; address_reference?: string | null }) {
+  return { id: c.id, name: c.name, email: c.email, phone: c.phone, address: c.address ?? null, address_reference: c.address_reference ?? null }
 }
+
+const CUST_COLS = 'id, name, email, phone, address, address_reference'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -67,9 +69,12 @@ Deno.serve(async (req) => {
       const name = (payload.name ?? '').trim()
       const email = (payload.email ?? '').trim().toLowerCase()
       const phone = onlyDigits(payload.phone)
+      const address = (payload.address ?? '').trim()
+      const address_reference = (payload.address_reference ?? '').trim()
       const password = payload.password ?? ''
       if (!name) return json({ error: 'Informe seu nome.' }, 400)
       if (!email || !email.includes('@')) return json({ error: 'Informe um e-mail válido.' }, 400)
+      if (!address) return json({ error: 'Informe o endereço de entrega.' }, 400)
       if (password.length < 6) return json({ error: 'A senha deve ter ao menos 6 caracteres.' }, 400)
 
       const { data: existing } = await admin.from('customers').select('id').ilike('email', email).not('password_hash', 'is', null).maybeSingle()
@@ -77,8 +82,8 @@ Deno.serve(async (req) => {
 
       const password_hash = await hashPassword(password)
       const { data: created, error } = await admin.from('customers')
-        .insert({ name, email, phone: phone || null, password_hash })
-        .select('id, name, email, phone').single()
+        .insert({ name, email, phone: phone || null, address, address_reference: address_reference || null, password_hash })
+        .select(CUST_COLS).single()
       if (error) return json({ error: error.message }, 400)
 
       const token = await createSession(created.id)
@@ -91,7 +96,7 @@ Deno.serve(async (req) => {
       if (!email || !password) return json({ error: 'Informe e-mail e senha.' }, 400)
 
       const { data: cust } = await admin.from('customers')
-        .select('id, name, email, phone, password_hash').ilike('email', email).not('password_hash', 'is', null).maybeSingle()
+        .select(`${CUST_COLS}, password_hash`).ilike('email', email).not('password_hash', 'is', null).maybeSingle()
       if (!cust || !cust.password_hash) return json({ error: 'E-mail ou senha inválidos.' }, 401)
       const ok = await verifyPassword(password, cust.password_hash)
       if (!ok) return json({ error: 'E-mail ou senha inválidos.' }, 401)
@@ -127,6 +132,6 @@ async function customerFromToken(token: string) {
     await admin.from('customer_sessions').delete().eq('token', token)
     return null
   }
-  const { data: cust } = await admin.from('customers').select('id, name, email, phone').eq('id', sess.customer_id).single()
+  const { data: cust } = await admin.from('customers').select(CUST_COLS).eq('id', sess.customer_id).single()
   return cust
 }
