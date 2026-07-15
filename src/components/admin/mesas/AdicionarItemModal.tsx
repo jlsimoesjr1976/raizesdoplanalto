@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Minus, Plus, Search, ShoppingCart, Package2 } from 'lucide-react'
+import { Minus, Plus, Search, ShoppingCart, Package2, Trash2, Lock } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { formatCurrency } from '@/lib/utils'
 import type { Product, Category } from '@/types/database'
-import { comboAvailable, comboFinal, comboTotal, expandCombo, type ComboWithItems } from '@/lib/combos'
+import { comboAvailable, comboFinal, comboTotal, comboMaxQty, expandCombo, type ComboWithItems } from '@/lib/combos'
 
 interface CartItem {
   product: Product
@@ -67,6 +67,14 @@ export function AdicionarItemModal({ open, onClose, onConfirm }: Props) {
   }
 
   function addCombo(combo: ComboWithItems) {
+    // Quantos combos já estão no carrinho? (pela linha do 1º componente)
+    const first = (combo.combo_items ?? [])[0]
+    const line = first ? cart.find((i) => i.comboKey === combo.id && i.product.id === first.product_id) : undefined
+    const jaNoCarrinho = first && line ? Math.floor(line.quantity / first.quantity) : 0
+    if (jaNoCarrinho + 1 > comboMaxQty(combo)) {
+      alert(`Estoque insuficiente para mais um "${combo.name}".`)
+      return
+    }
     // Expande o combo: cada produto entra com o preço já descontado e vai à sua fila de preparo
     const expanded = expandCombo(combo, 1)
     setCart((prev) => {
@@ -83,6 +91,10 @@ export function AdicionarItemModal({ open, onClose, onConfirm }: Props) {
       }
       return next
     })
+  }
+
+  function removeCombo(comboKey: string) {
+    setCart((prev) => prev.filter((i) => i.comboKey !== comboKey))
   }
 
   function updateQty(index: number, delta: number) {
@@ -196,13 +208,32 @@ export function AdicionarItemModal({ open, onClose, onConfirm }: Props) {
                     <span className="text-xs text-muted-foreground shrink-0">{formatCurrency(item.product.price)}</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => updateQty(index, -1)} className="w-6 h-6 rounded border flex items-center justify-center hover:bg-muted">
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
-                    <button onClick={() => updateQty(index, 1)} className="w-6 h-6 rounded border flex items-center justify-center hover:bg-muted">
-                      <Plus className="w-3 h-3" />
-                    </button>
+                    {item.comboKey ? (
+                      <>
+                        {/* Item de combo: quantidade travada; remove o combo inteiro */}
+                        <span title="Item de combo — quantidade fixa" className="w-6 h-6 rounded border flex items-center justify-center text-muted-foreground bg-muted/50">
+                          <Lock className="w-3 h-3" />
+                        </span>
+                        <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+                        <button
+                          title="Remover o combo inteiro do pedido"
+                          onClick={() => removeCombo(item.comboKey!)}
+                          className="w-6 h-6 rounded border flex items-center justify-center hover:bg-destructive/10 text-destructive"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => updateQty(index, -1)} className="w-6 h-6 rounded border flex items-center justify-center hover:bg-muted">
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+                        <button onClick={() => updateQty(index, 1)} className="w-6 h-6 rounded border flex items-center justify-center hover:bg-muted">
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
                     <span className="ml-auto text-xs font-medium">{formatCurrency(item.product.price * item.quantity)}</span>
                   </div>
                   <Input

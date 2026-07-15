@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ShoppingCart, Plus, Minus, Search, UtensilsCrossed, LogOut, User, CheckCircle2, Loader2, Trash2, Eye, EyeOff, Package2 } from 'lucide-react'
 import logoImg from '@/assets/logo.png'
 import type { Product, Category } from '@/types/database'
-import { comboAvailable, comboFinal, comboTotal, type ComboWithItems } from '@/lib/combos'
+import { comboAvailable, comboFinal, comboTotal, comboMaxQty, type ComboWithItems } from '@/lib/combos'
 
 interface CartItem {
   product: Product
@@ -198,6 +198,7 @@ function CardapioInner() {
                 const qty = cart.find((i) => i.comboId === c.id)?.quantity ?? 0
                 const total = comboTotal(c)
                 const final = comboFinal(c)
+                const maxQty = comboMaxQty(c)
                 return (
                   <div key={c.id} className="bg-white rounded-xl border-2 border-amber-200 overflow-hidden flex flex-col">
                     <div className="h-28 sm:h-32 bg-neutral-100 flex items-center justify-center overflow-hidden relative">
@@ -224,7 +225,12 @@ function CardapioInner() {
                           <div className="flex items-center gap-1.5">
                             <button onClick={() => updateQty(c.id, -1)} className="w-7 h-7 rounded-md border flex items-center justify-center bg-white"><Minus className="w-3.5 h-3.5" /></button>
                             <span className="w-5 text-center text-sm font-semibold">{qty}</span>
-                            <button onClick={() => updateQty(c.id, 1)} className="w-7 h-7 rounded-md border flex items-center justify-center bg-white"><Plus className="w-3.5 h-3.5" /></button>
+                            <button
+                              onClick={() => updateQty(c.id, 1)}
+                              disabled={qty >= maxQty}
+                              title={qty >= maxQty ? 'Estoque máximo atingido' : undefined}
+                              className="w-7 h-7 rounded-md border flex items-center justify-center bg-white disabled:opacity-40"
+                            ><Plus className="w-3.5 h-3.5" /></button>
                           </div>
                         )}
                       </div>
