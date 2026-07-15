@@ -304,11 +304,12 @@ interface ProductRowProps {
   onDelete: () => void
   onCyclePrep: () => void
   onToggleMenu: () => void
+  onUpdateField: (patch: Partial<Pick<Product, 'price' | 'cost_price' | 'stock_quantity'>>) => void
   duplicating: boolean
   deleting: boolean
 }
 
-function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, onToggleMenu, duplicating, deleting }: ProductRowProps) {
+function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, onToggleMenu, onUpdateField, duplicating, deleting }: ProductRowProps) {
   return (
     <div className="flex items-center gap-3 p-2.5 rounded-lg border bg-card hover:shadow-sm transition-shadow">
       <div className="w-11 h-11 rounded-md bg-muted overflow-hidden shrink-0 flex items-center justify-center">
@@ -328,13 +329,65 @@ function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDe
           <PrepStationButton station={p.prep_station} onCycle={onCyclePrep} />
           <MenuVisibilityButton visible={p.show_in_menu} onToggle={onToggleMenu} />
         </div>
-        <div className={cn('text-xs mt-0.5 flex items-center gap-1',
-          p.stock_quantity <= 0 ? 'text-red-600' : p.stock_quantity <= 5 ? 'text-amber-600' : 'text-muted-foreground')}>
-          {p.stock_quantity <= 0 ? <AlertTriangle className="w-3 h-3" /> : <Package className="w-3 h-3" />}
-          {p.stock_quantity <= 0 ? 'Sem estoque' : `${p.stock_quantity} un`}
+        {/* Mobile: venda + estoque compactos */}
+        <div className="flex sm:hidden items-center gap-3 mt-0.5">
+          <InlineNumber
+            value={p.price}
+            title="Preço de venda"
+            onSave={(v) => onUpdateField({ price: v })}
+            render={(v) => <span className="text-xs font-bold text-green-600 tabular-nums">{formatCurrency(v)}</span>}
+          />
+          <InlineNumber
+            value={p.stock_quantity}
+            title="Quantidade em estoque"
+            onSave={(v) => onUpdateField({ stock_quantity: v })}
+            render={(v) => (
+              <span className={cn('inline-flex items-center gap-1 text-xs',
+                v <= 0 ? 'text-red-600' : v <= 5 ? 'text-amber-600' : 'text-muted-foreground')}>
+                {v <= 0 ? <AlertTriangle className="w-3 h-3" /> : <Package className="w-3 h-3" />}
+                {v} un
+              </span>
+            )}
+          />
         </div>
       </div>
-      <span className="font-bold text-green-600 shrink-0 tabular-nums">{formatCurrency(p.price)}</span>
+      {/* Venda / Custo / Estoque — editáveis inline */}
+      <div className="hidden sm:grid grid-cols-3 gap-1.5 text-center shrink-0 w-64">
+        <div className="rounded-md border bg-muted/30 px-1 py-0.5">
+          <p className="text-[9px] text-muted-foreground leading-none">Venda</p>
+          <InlineNumber
+            value={p.price}
+            title="Preço de venda"
+            onSave={(v) => onUpdateField({ price: v })}
+            render={(v) => <span className="text-xs font-bold text-green-600 tabular-nums">{formatCurrency(v)}</span>}
+          />
+        </div>
+        <div className="rounded-md border bg-muted/30 px-1 py-0.5">
+          <p className="text-[9px] text-muted-foreground leading-none">Custo</p>
+          <InlineNumber
+            value={p.cost_price}
+            title="Preço de custo"
+            onSave={(v) => onUpdateField({ cost_price: v })}
+            render={(v) => <span className="text-xs font-medium tabular-nums">{formatCurrency(v)}</span>}
+          />
+        </div>
+        <div className={cn('rounded-md border px-1 py-0.5',
+          p.stock_quantity <= 0 ? 'bg-red-50 border-red-200' : p.stock_quantity <= 5 ? 'bg-amber-50 border-amber-200' : 'bg-muted/30')}>
+          <p className="text-[9px] text-muted-foreground leading-none">Estoque</p>
+          <InlineNumber
+            value={p.stock_quantity}
+            title="Quantidade em estoque"
+            onSave={(v) => onUpdateField({ stock_quantity: v })}
+            render={(v) => (
+              <span className={cn('inline-flex items-center gap-1 text-xs font-medium tabular-nums',
+                v <= 0 ? 'text-red-700' : v <= 5 ? 'text-amber-700' : '')}>
+                {v <= 0 ? <AlertTriangle className="w-3 h-3" /> : <Package className="w-3 h-3" />}
+                {v} un
+              </span>
+            )}
+          />
+        </div>
+      </div>
       <div className="flex gap-1.5 shrink-0">
         <Button size="sm" variant="outline" title="Editar" onClick={onEdit}>
           <Pencil className="w-3.5 h-3.5" />
@@ -628,6 +681,7 @@ export function ProdutosTab() {
               onDelete={() => handleDelete(p)}
               onCyclePrep={() => prepMutation.mutate({ id: p.id, station: nextPrepStation(p.prep_station) })}
               onToggleMenu={() => menuMutation.mutate({ id: p.id, show: !p.show_in_menu })}
+              onUpdateField={(patch) => fieldMutation.mutate({ id: p.id, patch })}
               duplicating={duplicateMutation.isPending}
               deleting={deleteMutation.isPending}
             />
