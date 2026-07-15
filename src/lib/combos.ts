@@ -26,10 +26,15 @@ export function comboAvailable(combo: ComboWithItems): boolean {
  */
 export function expandCombo(combo: ComboWithItems, comboQty: number) {
   const factor = 1 - Number(combo.discount_percent) / 100
-  return (combo.combo_items ?? []).map((i) => ({
-    product: i.products,
-    quantity: i.quantity * comboQty,
-    unit_price: Math.round(Number(i.products.price) * factor * 100) / 100,
-    display_name: `${i.products.name} (Combo: ${combo.name})`,
-  }))
+  return (combo.combo_items ?? [])
+    .filter((i) => !!i.products)
+    .map((i) => {
+      const p = i.products as Product
+      return {
+        product: p,
+        quantity: i.quantity * comboQty,
+        unit_price: Math.round(Number(p.price) * factor * 100) / 100,
+        display_name: `${p.name} (Combo: ${combo.name})`,
+      }
+    })
 }
