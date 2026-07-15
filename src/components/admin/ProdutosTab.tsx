@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
 import { compressImage } from '@/lib/imageCompress'
@@ -421,6 +421,18 @@ export function ProdutosTab() {
   const [fichaProduct, setFichaProduct] = useState<ProductWithCategory | null>(null)
   const [fichaOpen, setFichaOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+
+  // Estoque em tempo real: lançamentos em comanda/pedido online baixam o
+  // estoque via trigger; invalida o cache quando products mudar no banco.
+  useEffect(() => {
+    const ch = supabase
+      .channel('produtos-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['products'] })
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [queryClient])
 
   const { data: products = [], isLoading: loadingProducts } = useQuery({
     queryKey: ['products'],
