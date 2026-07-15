@@ -1,26 +1,28 @@
 import { supabase } from '@/integrations/supabase/client'
 
+// Todas as chamadas HTTP à Evolution API passam pela Edge Function
+// "evolution-proxy": a API key fica no servidor e nunca chega ao navegador.
+
 interface EvolutionConfig {
   url: string
   apiKey: string
   instance: string
 }
 
-async function getConfig(): Promise<EvolutionConfig | null> {
-  const { data } = await supabase
-    .from('settings')
-    .select('key, value')
-    .in('key', ['evolution_api_url', 'evolution_api_key', 'evolution_instance'])
+interface ProxyResult<T = unknown> { status: number; ok: boolean; data: T; error?: string }
 
-  if (!data) return null
-
-  const map = Object.fromEntries(data.map((r) => [r.key, r.value as string]))
-  const url = map['evolution_api_url']?.replace(/^"|"$/g, '')
-  const apiKey = map['evolution_api_key']?.replace(/^"|"$/g, '')
-  const instance = map['evolution_instance']?.replace(/^"|"$/g, '')
-
-  if (!url || !apiKey || !instance) return null
-  return { url, apiKey, instance }
+async function evoFetch<T = unknown>(
+  endpoint: string,
+  body?: unknown,
+  override?: EvolutionConfig
+): Promise<{ ok: boolean; status: number; data?: T; error?: string }> {
+  const { data, error } = await supabase.functions.invoke('evolution-proxy', {
+    body: { endpoint, body, override },
+  })
+  if (error) return { ok: false, status: 0, error: error.message }
+  const r = data as ProxyResult<T>
+  if (r.error) return { ok: false, status: r.status ?? 0, error: r.error }
+  return { ok: r.ok, status: r.status, data: r.data }
 }
 
 /** Formata número para WhatsApp (apenas dígitos, com DDI) */
@@ -32,75 +34,26 @@ export function formatPhoneForWhatsApp(ddi: string, phone: string): string {
 
 /** Envia mensagem de texto via Evolution API */
 export async function sendWhatsAppText(ddi: string, phone: string, text: string): Promise<{ ok: boolean; error?: string }> {
-  const config = await getConfig()
-  if (!config) {
-    return { ok: false, error: 'Evolution API não configurada. Configure em Configurações.' }
-  }
-
   const number = formatPhoneForWhatsApp(ddi, phone)
-
-  try {
-    const res = await fetch(
-      `${config.url}/message/sendText/${config.instance}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': config.apiKey,
-        },
-        body: JSON.stringify({ number, text }),
-      }
-    )
-
-    if (!res.ok) {
-      const body = await res.text()
-      return { ok: false, error: `Erro Evolution API: ${res.status} — ${body.slice(0, 120)}` }
-    }
-
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Erro de conexão com a Evolution API' }
-  }
+  const r = await evoFetch('message/sendText', { number, text })
+  if (!r.ok) return { ok: false, error: r.error ?? `Erro Evolution API: ${r.status}` }
+  return { ok: true }
 }
 
 /** Testa a conexão com a Evolution API e retorna o estado da instância */
 export async function testEvolutionConnection(
   override?: EvolutionConfig
 ): Promise<{ ok: boolean; state?: string; error?: string }> {
-  const config = override ?? await getConfig()
-  if (!config || !config.url || !config.apiKey || !config.instance) {
+  if (override && (!override.url || !override.apiKey || !override.instance)) {
     return { ok: false, error: 'Preencha URL, API Key e Nome da Instância.' }
   }
-
-  const baseUrl = config.url.replace(/\/+$/, '')
-
-  try {
-    const res = await fetch(
-      `${baseUrl}/instance/connectionState/${config.instance}`,
-      { headers: { apikey: config.apiKey } }
-    )
-
-    if (res.status === 404) {
-      return { ok: false, error: `Instância "${config.instance}" não encontrada nesta API.` }
-    }
-    if (res.status === 401 || res.status === 403) {
-      return { ok: false, error: 'API Key inválida ou sem permissão.' }
-    }
-    if (!res.ok) {
-      const body = await res.text()
-      return { ok: false, error: `Erro ${res.status} — ${body.slice(0, 120)}` }
-    }
-
-    const j = await res.json()
-    const state = j?.instance?.state ?? j?.state ?? 'desconhecido'
-    return { ok: true, state }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Erro de conexão'
-    if (/failed to fetch/i.test(msg)) {
-      return { ok: false, error: 'Não foi possível alcançar a URL. Verifique o endereço e se a API permite acesso (CORS).' }
-    }
-    return { ok: false, error: msg }
-  }
+  const r = await evoFetch<{ instance?: { state?: string }; state?: string }>('instance/connectionState', undefined, override)
+  if (r.status === 404) return { ok: false, error: 'Instância não encontrada nesta API.' }
+  if (r.status === 401 || r.status === 403) return { ok: false, error: r.error ?? 'API Key inválida ou sem permissão.' }
+  if (!r.ok) return { ok: false, error: r.error ?? `Erro ${r.status}` }
+  const j = r.data
+  const state = j?.instance?.state ?? j?.state ?? 'desconhecido'
+  return { ok: true, state }
 }
 
 /** Gera código numérico de 4 dígitos */
@@ -153,70 +106,47 @@ function extractText(m: RawMessage | null | undefined): string {
   return '[mensagem]'
 }
 
-function baseUrl(config: EvolutionConfig) {
-  return config.url.replace(/\/+$/, '')
-}
-
 /** Lista as conversas individuais (exclui grupos) */
 export async function fetchChats(): Promise<{ ok: boolean; chats: WhatsAppChat[]; error?: string }> {
-  const config = await getConfig()
-  if (!config) return { ok: false, chats: [], error: 'Evolution API não configurada.' }
-  try {
-    const res = await fetch(`${baseUrl(config)}/chat/findChats/${config.instance}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: config.apiKey },
-      body: JSON.stringify({}),
+  const r = await evoFetch<Record<string, unknown>[] | { chats?: Record<string, unknown>[] }>('chat/findChats', {})
+  if (!r.ok) return { ok: false, chats: [], error: r.error ?? `Erro ${r.status} ao buscar conversas` }
+  const data = r.data
+  const list: Record<string, unknown>[] = Array.isArray(data) ? data : (data?.chats ?? [])
+  const chats: WhatsAppChat[] = list
+    .filter((c) => typeof c.remoteJid === 'string' && (c.remoteJid as string).endsWith('@s.whatsapp.net'))
+    .map((c) => {
+      const jid = c.remoteJid as string
+      const lm = c.lastMessage as RawMessage | undefined
+      return {
+        jid,
+        phone: jid.split('@')[0].replace(/\D/g, ''),
+        pushName: (c.pushName as string) || '',
+        lastText: extractText(lm),
+        lastFromMe: !!lm?.key?.fromMe,
+        timestamp: Number(lm?.messageTimestamp ?? c.updatedAt ?? 0),
+        unread: Number(c.unreadCount ?? 0),
+      }
     })
-    if (!res.ok) return { ok: false, chats: [], error: `Erro ${res.status} ao buscar conversas` }
-    const data = await res.json()
-    const list: Record<string, unknown>[] = Array.isArray(data) ? data : (data.chats ?? [])
-    const chats: WhatsAppChat[] = list
-      .filter((c) => typeof c.remoteJid === 'string' && (c.remoteJid as string).endsWith('@s.whatsapp.net'))
-      .map((c) => {
-        const jid = c.remoteJid as string
-        const lm = c.lastMessage as RawMessage | undefined
-        return {
-          jid,
-          phone: jid.split('@')[0].replace(/\D/g, ''),
-          pushName: (c.pushName as string) || '',
-          lastText: extractText(lm),
-          lastFromMe: !!lm?.key?.fromMe,
-          timestamp: Number(lm?.messageTimestamp ?? c.updatedAt ?? 0),
-          unread: Number(c.unreadCount ?? 0),
-        }
-      })
-      .sort((a, b) => b.timestamp - a.timestamp)
-    return { ok: true, chats }
-  } catch (err) {
-    return { ok: false, chats: [], error: err instanceof Error ? err.message : 'Erro de conexão' }
-  }
+    .sort((a, b) => b.timestamp - a.timestamp)
+  return { ok: true, chats }
 }
 
 /** Busca as mensagens de uma conversa (ordem cronológica) */
 export async function fetchMessages(jid: string): Promise<{ ok: boolean; messages: WhatsAppMessage[]; error?: string }> {
-  const config = await getConfig()
-  if (!config) return { ok: false, messages: [], error: 'Evolution API não configurada.' }
-  try {
-    const res = await fetch(`${baseUrl(config)}/chat/findMessages/${config.instance}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: config.apiKey },
-      body: JSON.stringify({ where: { key: { remoteJid: jid } } }),
-    })
-    if (!res.ok) return { ok: false, messages: [], error: `Erro ${res.status} ao buscar mensagens` }
-    const data = await res.json()
-    const records: RawMessage[] = data?.messages?.records ?? (Array.isArray(data?.messages) ? data.messages : [])
-    const messages: WhatsAppMessage[] = records
-      .map((r) => ({
-        id: r.key?.id ?? r.id ?? String(r.messageTimestamp),
-        fromMe: !!r.key?.fromMe,
-        text: extractText(r),
-        timestamp: Number(r.messageTimestamp ?? 0),
-      }))
-      .sort((a, b) => a.timestamp - b.timestamp)
-    return { ok: true, messages }
-  } catch (err) {
-    return { ok: false, messages: [], error: err instanceof Error ? err.message : 'Erro de conexão' }
-  }
+  const r = await evoFetch<{ messages?: { records?: RawMessage[] } | RawMessage[] }>('chat/findMessages', { where: { key: { remoteJid: jid } } })
+  if (!r.ok) return { ok: false, messages: [], error: r.error ?? `Erro ${r.status} ao buscar mensagens` }
+  const data = r.data
+  const records: RawMessage[] = (data?.messages as { records?: RawMessage[] })?.records
+    ?? (Array.isArray(data?.messages) ? (data?.messages as RawMessage[]) : [])
+  const messages: WhatsAppMessage[] = records
+    .map((m) => ({
+      id: m.key?.id ?? m.id ?? String(m.messageTimestamp),
+      fromMe: !!m.key?.fromMe,
+      text: extractText(m),
+      timestamp: Number(m.messageTimestamp ?? 0),
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp)
+  return { ok: true, messages }
 }
 
 /** Mensagens capturadas via webhook (tabela whatsapp_messages) */
@@ -262,22 +192,9 @@ export async function fetchConversationMessages(jid: string): Promise<{ ok: bool
 
 /** Envia texto para um número já normalizado (somente dígitos, com DDI) */
 export async function sendWhatsAppRaw(numberDigits: string, text: string): Promise<{ ok: boolean; error?: string }> {
-  const config = await getConfig()
-  if (!config) return { ok: false, error: 'Evolution API não configurada.' }
-  try {
-    const res = await fetch(`${baseUrl(config)}/message/sendText/${config.instance}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: config.apiKey },
-      body: JSON.stringify({ number: numberDigits, text }),
-    })
-    if (!res.ok) {
-      const body = await res.text()
-      return { ok: false, error: `Erro ${res.status}: ${body.slice(0, 120)}` }
-    }
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Erro de conexão' }
-  }
+  const r = await evoFetch('message/sendText', { number: numberDigits, text })
+  if (!r.ok) return { ok: false, error: r.error ?? `Erro ${r.status}` }
+  return { ok: true }
 }
 
 /** Envia uma mídia (imagem) via URL pública, com legenda opcional */
@@ -285,29 +202,16 @@ export async function sendWhatsAppMedia(
   numberDigits: string,
   opts: { media: string; mimetype: string; fileName: string; caption?: string; mediatype?: 'image' | 'video' | 'document' }
 ): Promise<{ ok: boolean; error?: string }> {
-  const config = await getConfig()
-  if (!config) return { ok: false, error: 'Evolution API não configurada.' }
-  try {
-    const res = await fetch(`${baseUrl(config)}/message/sendMedia/${config.instance}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: config.apiKey },
-      body: JSON.stringify({
-        number: numberDigits,
-        mediatype: opts.mediatype ?? 'image',
-        mimetype: opts.mimetype,
-        media: opts.media,
-        fileName: opts.fileName,
-        caption: opts.caption ?? '',
-      }),
-    })
-    if (!res.ok) {
-      const body = await res.text()
-      return { ok: false, error: `Erro ${res.status}: ${body.slice(0, 120)}` }
-    }
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Erro de conexão' }
-  }
+  const r = await evoFetch('message/sendMedia', {
+    number: numberDigits,
+    mediatype: opts.mediatype ?? 'image',
+    mimetype: opts.mimetype,
+    media: opts.media,
+    fileName: opts.fileName,
+    caption: opts.caption ?? '',
+  })
+  if (!r.ok) return { ok: false, error: r.error ?? `Erro ${r.status}` }
+  return { ok: true }
 }
 
 /** Chave normalizada de telefone p/ casar com o cadastro (DDD + 8 últimos dígitos) */

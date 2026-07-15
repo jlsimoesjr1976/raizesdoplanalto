@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select'
 import { Paperclip, X, Loader2, CheckCircle2, FileText } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
+import { openPrivateAttachment } from '@/lib/attachments'
 import { formatCurrency } from '@/lib/utils'
 import type { FinancialAttachment, FinancialEntry, SettlementMethod } from '@/types/database'
 
@@ -232,9 +233,9 @@ export function BaixaModal({ open, entry, onClose, onSettled }: Props) {
             {receipt ? (
               <div className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30 text-sm">
                 <FileText className="w-4 h-4 text-primary shrink-0" />
-                <a href={receipt.url} target="_blank" rel="noreferrer" className="flex-1 truncate hover:underline">
+                <button type="button" onClick={() => openPrivateAttachment('financial-attachments', receipt.path)} className="flex-1 truncate hover:underline text-left">
                   {receipt.name}
-                </a>
+                </button>
                 <button type="button" onClick={removeReceipt} className="text-muted-foreground hover:text-destructive shrink-0">
                   <X className="w-4 h-4" />
                 </button>

@@ -13,6 +13,7 @@ import {
 import { Paperclip, X, Loader2, FileText, Image as ImageIcon, FileSpreadsheet, File, History } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { supabase } from '@/integrations/supabase/client'
+import { openPrivateAttachment } from '@/lib/attachments'
 import type {
   BeneficiaryType, FinancialAttachment, FinancialEntry, FinancialEntryType,
 } from '@/types/database'
@@ -284,14 +285,13 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
                   return (
                     <div key={att.path} className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30 text-sm">
                       <Icon className="w-4 h-4 text-primary shrink-0" />
-                      <a
-                        href={att.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex-1 truncate hover:underline"
+                      <button
+                        type="button"
+                        onClick={() => openPrivateAttachment('financial-attachments', att.path)}
+                        className="flex-1 truncate hover:underline text-left"
                       >
                         {att.name}
-                      </a>
+                      </button>
                       <button
                         type="button"
                         onClick={() => removeAttachment(att)}
