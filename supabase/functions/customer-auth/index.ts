@@ -59,13 +59,30 @@ function publicCustomer(c: { id: string; name: string; email: string | null; pho
 
 const CUST_COLS = 'id, name, email, phone, address, address_reference'
 
+function clientIp(req: Request): string {
+  return (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'unknown'
+}
+
+/** true = permitido; false = limite estourado */
+async function rateLimit(bucket: string, key: string, max: number, windowSecs: number): Promise<boolean> {
+  const { data, error } = await admin.rpc('check_rate_limit', {
+    p_bucket: bucket, p_key: key, p_max: max, p_window_secs: windowSecs,
+  })
+  if (error) return true // não bloqueia clientes por falha interna do limitador
+  return data === true
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
     const payload: Record<string, string> = await req.json().catch(() => ({}))
     const action = payload.action
+    const ip = clientIp(req)
 
     if (action === 'signup') {
+      if (!(await rateLimit('signup_ip', ip, 5, 3600))) {
+        return json({ error: 'Muitas tentativas de cadastro. Tente novamente mais tarde.' }, 429)
+      }
       const name = (payload.name ?? '').trim()
       const email = (payload.email ?? '').trim().toLowerCase()
       const phone = onlyDigits(payload.phone)
@@ -93,6 +110,14 @@ Deno.serve(async (req) => {
       const email = (payload.email ?? '').trim().toLowerCase()
       const password = payload.password ?? ''
       if (!email || !password) return json({ error: 'Informe e-mail e senha.' }, 400)
+      // Anti-força-bruta: por conta e por IP
+      const [okEmail, okIp] = await Promise.all([
+        rateLimit('login_email', email, 5, 300),
+        rateLimit('login_ip', ip, 20, 300),
+      ])
+      if (!okEmail || !okIp) {
+        return json({ error: 'Muitas tentativas de login. Aguarde alguns minutos e tente novamente.' }, 429)
+      }
 
       const { data: cust } = await admin.from('customers')
         .select(`${CUST_COLS}, password_hash`).ilike('email', email).not('password_hash', 'is', null).maybeSingle()

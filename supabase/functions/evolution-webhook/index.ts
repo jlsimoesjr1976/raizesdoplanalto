@@ -23,6 +23,15 @@ function extractText(m: Record<string, unknown> | null | undefined): string {
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('ok', { status: 200 })
 
+  // Autenticação do webhook: a Evolution deve chamar a URL com ?secret=...
+  // (ou header x-webhook-secret) igual ao secret EVOLUTION_WEBHOOK_SECRET.
+  const expected = Deno.env.get('EVOLUTION_WEBHOOK_SECRET') ?? ''
+  if (expected) {
+    const url = new URL(req.url)
+    const got = url.searchParams.get('secret') ?? req.headers.get('x-webhook-secret') ?? ''
+    if (got !== expected) return new Response('forbidden', { status: 403 })
+  }
+
   try {
     const body = await req.json()
     const event = String(body.event ?? '').toLowerCase()

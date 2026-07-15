@@ -34,6 +34,12 @@ Deno.serve(async (req) => {
     const { data: customer } = await admin.from('customers').select('id, name, phone, address, address_reference').eq('id', sess.customer_id).single()
     if (!customer) return json({ error: 'Cliente não encontrado.' }, 404)
 
+    // Anti-spam: no máximo 5 pedidos a cada 10 minutos por cliente
+    const { data: rlOk } = await admin.rpc('check_rate_limit', {
+      p_bucket: 'place_order', p_key: customer.id, p_max: 5, p_window_secs: 600,
+    })
+    if (rlOk === false) return json({ error: 'Muitos pedidos em sequência. Aguarde alguns minutos.' }, 429)
+
     // Carrega produtos e combos do carrinho a partir do banco (fonte da verdade)
     const prodIds = [...new Set(items.filter((i) => i.product_id).map((i) => i.product_id!))]
     const comboIds = [...new Set(items.filter((i) => i.combo_id).map((i) => i.combo_id!))]
@@ -42,7 +48,7 @@ Deno.serve(async (req) => {
         ? admin.from('products').select('id, name, price, prep_station, stock_quantity, active').in('id', prodIds)
         : Promise.resolve({ data: [] }),
       comboIds.length
-        ? admin.from('combos').select('id, name, discount_percent, active, combo_items(quantity, products(id, name, price, prep_station, stock_quantity, active))').in('id', comboIds)
+        ? admin.from('combos').select('id, name, discount_percent, active, show_in_menu, combo_items(quantity, products(id, name, price, prep_station, stock_quantity, active))').in('id', comboIds)
         : Promise.resolve({ data: [] }),
     ])
     const byId = new Map((products ?? []).map((p) => [p.id, p]))
@@ -61,7 +67,7 @@ Deno.serve(async (req) => {
 
       if (line.combo_id) {
         const c = comboById.get(line.combo_id)
-        if (!c || !c.active) return json({ error: 'Combo indisponível no carrinho.' }, 400)
+        if (!c || !c.active || !c.show_in_menu) return json({ error: 'Combo indisponível no carrinho.' }, 400)
         const comboItems = (c.combo_items ?? []) as { quantity: number; products: { id: string; name: string; price: number; prep_station: string | null; stock_quantity: number; active: boolean } }[]
         if (comboItems.length === 0) return json({ error: `Combo ${c.name} sem produtos.` }, 400)
         const factor = 1 - Number(c.discount_percent) / 100
