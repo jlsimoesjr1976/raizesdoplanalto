@@ -32,7 +32,7 @@ function CardapioInner() {
   const { data: categories = [] } = useQuery({
     queryKey: ['pub-categories'],
     queryFn: async () => {
-      const { data } = await supabase.from('categories').select('*').eq('active', true).order('sort_order')
+      const { data } = await supabase.from('categories').select('*').eq('active', true).eq('show_in_menu', true).order('sort_order')
       return (data ?? []) as Category[]
     },
   })
@@ -52,11 +52,16 @@ function CardapioInner() {
     },
   })
 
-  const filtered = useMemo(() => products.filter((p) => {
-    const mc = activeCat === 'all' || p.category_id === activeCat
-    const ms = !search || p.name.toLowerCase().includes(search.toLowerCase())
-    return mc && ms
-  }), [products, activeCat, search])
+  const filtered = useMemo(() => {
+    const visibleCats = new Set(categories.map((c) => c.id))
+    return products.filter((p) => {
+      // Produto de categoria oculta não aparece nem em "Todos"
+      if (p.category_id && !visibleCats.has(p.category_id)) return false
+      const mc = activeCat === 'all' || p.category_id === activeCat
+      const ms = !search || p.name.toLowerCase().includes(search.toLowerCase())
+      return mc && ms
+    })
+  }, [products, categories, activeCat, search])
 
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0)
   const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0)

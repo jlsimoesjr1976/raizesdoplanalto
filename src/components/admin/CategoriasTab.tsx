@@ -6,7 +6,8 @@ import { CategoriaFormModal } from './CategoriaFormModal'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Plus, Pencil, Trash2, Tag } from 'lucide-react'
+import { Plus, Pencil, Trash2, Tag, Eye, EyeOff } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export function CategoriasTab() {
   const queryClient = useQueryClient()
@@ -31,6 +32,24 @@ export function CategoriasTab() {
       if (error) throw error
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
+  })
+
+  const menuMutation = useMutation({
+    mutationFn: async ({ id, show }: { id: string; show: boolean }) => {
+      const { error } = await supabase.from('categories').update({ show_in_menu: show }).eq('id', id)
+      if (error) throw error
+    },
+    onMutate: async ({ id, show }) => {
+      await queryClient.cancelQueries({ queryKey: ['categories'] })
+      const prev = queryClient.getQueryData<Category[]>(['categories'])
+      queryClient.setQueryData<Category[]>(['categories'], (old) =>
+        (old ?? []).map((c) => (c.id === id ? { ...c, show_in_menu: show } : c)))
+      return { prev }
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['categories'], ctx.prev)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
   })
 
   const handleDelete = (cat: Category) => {
@@ -96,9 +115,23 @@ export function CategoriasTab() {
                       </p>
                     )}
                   </div>
-                  <Badge variant={cat.active ? 'default' : 'secondary'} className="shrink-0 text-xs">
-                    {cat.active ? 'Ativo' : 'Inativo'}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <Badge variant={cat.active ? 'default' : 'secondary'} className="text-xs">
+                      {cat.active ? 'Ativo' : 'Inativo'}
+                    </Badge>
+                    <button
+                      type="button"
+                      title={cat.show_in_menu ? 'Visível no cardápio do cliente (clique para ocultar)' : 'Oculta no cardápio do cliente (clique para exibir)'}
+                      onClick={() => menuMutation.mutate({ id: cat.id, show: !cat.show_in_menu })}
+                      className={cn(
+                        'inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full transition-colors',
+                        cat.show_in_menu ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      )}
+                    >
+                      {cat.show_in_menu ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                      {cat.show_in_menu ? 'No cardápio' : 'Oculta'}
+                    </button>
+                  </div>
                 </div>
 
                 <p className="text-xs text-muted-foreground">Ordem: {cat.sort_order}</p>

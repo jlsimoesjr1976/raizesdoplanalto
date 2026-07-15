@@ -29,6 +29,7 @@ export interface Category {
   image_url: string | null
   sort_order: number
   active: boolean
+  show_in_menu: boolean
   created_at: string
 }
 
