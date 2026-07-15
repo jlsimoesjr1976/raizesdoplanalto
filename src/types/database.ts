@@ -48,6 +48,7 @@ export interface Product {
   image_url: string | null
   has_ingredients: boolean
   active: boolean
+  show_in_menu: boolean
   sort_order: number
   prep_station: PrepStation
   created_at: string

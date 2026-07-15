@@ -39,7 +39,7 @@ function CardapioInner() {
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['pub-products'],
     queryFn: async () => {
-      const { data } = await supabase.from('products').select('*').eq('active', true).gte('stock_quantity', 1).order('name')
+      const { data } = await supabase.from('products').select('*').eq('active', true).eq('show_in_menu', true).gte('stock_quantity', 1).order('name')
       return (data ?? []) as Product[]
     },
   })

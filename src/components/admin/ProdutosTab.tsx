@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, ClipboardList, UtensilsCrossed, Package, AlertTriangle, Copy, Camera, Loader2, FileSpreadsheet, LayoutGrid, List } from 'lucide-react'
+import { Plus, Pencil, Trash2, ClipboardList, UtensilsCrossed, Package, AlertTriangle, Copy, Camera, Loader2, FileSpreadsheet, LayoutGrid, List, Eye, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ImportXlsxModal } from './ImportXlsxModal'
 import { produtosImportConfig } from '@/lib/importConfigs'
@@ -67,6 +67,23 @@ function PrepStationButton({ station, onCycle }: { station: PrepStation; onCycle
   )
 }
 
+function MenuVisibilityButton({ visible, onToggle }: { visible: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      title={visible ? 'Visível no cardápio do cliente (clique para ocultar)' : 'Oculto no cardápio do cliente (clique para exibir)'}
+      onClick={(e) => { e.stopPropagation(); onToggle() }}
+      className={cn(
+        'inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full transition-colors',
+        visible ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+      )}
+    >
+      {visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+      {visible ? 'No cardápio' : 'Oculto'}
+    </button>
+  )
+}
+
 async function uploadProductImage(productId: string, file: File): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
   const filename = `${productId}-${Date.now()}.${ext}`
@@ -84,12 +101,13 @@ interface ProductCardProps {
   onDuplicate: () => void
   onDelete: () => void
   onCyclePrep: () => void
+  onToggleMenu: () => void
   duplicating: boolean
   deleting: boolean
   onImageUpdated: () => void
 }
 
-function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, duplicating, deleting, onImageUpdated }: ProductCardProps) {
+function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, onToggleMenu, duplicating, deleting, onImageUpdated }: ProductCardProps) {
   const [uploading, setUploading] = useState(false)
   const [localImage, setLocalImage] = useState<string | null>(p.image_url ?? null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -155,6 +173,7 @@ function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onD
               {p.active ? 'Ativo' : 'Inativo'}
             </Badge>
             <PrepStationButton station={p.prep_station} onCycle={onCyclePrep} />
+            <MenuVisibilityButton visible={p.show_in_menu} onToggle={onToggleMenu} />
           </div>
         </div>
 
@@ -202,11 +221,12 @@ interface ProductRowProps {
   onDuplicate: () => void
   onDelete: () => void
   onCyclePrep: () => void
+  onToggleMenu: () => void
   duplicating: boolean
   deleting: boolean
 }
 
-function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, duplicating, deleting }: ProductRowProps) {
+function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, onToggleMenu, duplicating, deleting }: ProductRowProps) {
   return (
     <div className="flex items-center gap-3 p-2.5 rounded-lg border bg-card hover:shadow-sm transition-shadow">
       <div className="w-11 h-11 rounded-md bg-muted overflow-hidden shrink-0 flex items-center justify-center">
@@ -224,6 +244,7 @@ function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDe
           )}
           {!p.active && <Badge variant="secondary" className="text-[10px]">Inativo</Badge>}
           <PrepStationButton station={p.prep_station} onCycle={onCyclePrep} />
+          <MenuVisibilityButton visible={p.show_in_menu} onToggle={onToggleMenu} />
         </div>
         <div className={cn('text-xs mt-0.5 flex items-center gap-1',
           p.stock_quantity <= 0 ? 'text-red-600' : p.stock_quantity <= 5 ? 'text-amber-600' : 'text-muted-foreground')}>
@@ -306,6 +327,24 @@ export function ProdutosTab() {
       const prev = queryClient.getQueryData<ProductWithCategory[]>(['products'])
       queryClient.setQueryData<ProductWithCategory[]>(['products'], (old) =>
         (old ?? []).map((p) => (p.id === id ? { ...p, prep_station: station } : p)))
+      return { prev }
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['products'], ctx.prev)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
+  })
+
+  const menuMutation = useMutation({
+    mutationFn: async ({ id, show }: { id: string; show: boolean }) => {
+      const { error } = await supabase.from('products').update({ show_in_menu: show }).eq('id', id)
+      if (error) throw error
+    },
+    onMutate: async ({ id, show }) => {
+      await queryClient.cancelQueries({ queryKey: ['products'] })
+      const prev = queryClient.getQueryData<ProductWithCategory[]>(['products'])
+      queryClient.setQueryData<ProductWithCategory[]>(['products'], (old) =>
+        (old ?? []).map((p) => (p.id === id ? { ...p, show_in_menu: show } : p)))
       return { prev }
     },
     onError: (_e, _v, ctx) => {
@@ -465,6 +504,7 @@ export function ProdutosTab() {
               onDuplicate={() => duplicateMutation.mutate(p)}
               onDelete={() => handleDelete(p)}
               onCyclePrep={() => prepMutation.mutate({ id: p.id, station: nextPrepStation(p.prep_station) })}
+              onToggleMenu={() => menuMutation.mutate({ id: p.id, show: !p.show_in_menu })}
               duplicating={duplicateMutation.isPending}
               deleting={deleteMutation.isPending}
               onImageUpdated={() => queryClient.invalidateQueries({ queryKey: ['products'] })}
@@ -486,6 +526,7 @@ export function ProdutosTab() {
               onDuplicate={() => duplicateMutation.mutate(p)}
               onDelete={() => handleDelete(p)}
               onCyclePrep={() => prepMutation.mutate({ id: p.id, station: nextPrepStation(p.prep_station) })}
+              onToggleMenu={() => menuMutation.mutate({ id: p.id, show: !p.show_in_menu })}
               duplicating={duplicateMutation.isPending}
               deleting={deleteMutation.isPending}
             />
