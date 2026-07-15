@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
+import { compressImage } from '@/lib/imageCompress'
 import { Category, Ingredient, Product, ProductIngredient } from '@/types/database'
 import { formatCurrency } from '@/lib/utils'
 import {
@@ -128,7 +129,8 @@ interface Props {
 async function uploadProductImage(file: File, productId?: string): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
   const filename = `${productId ?? crypto.randomUUID()}-${Date.now()}.${ext}`
-  const { error } = await supabase.storage.from('product-images').upload(filename, file, { upsert: true })
+  const compressed = await compressImage(file)
+  const { error } = await supabase.storage.from('product-images').upload(filename, compressed, { upsert: true })
   if (error) throw error
   const { data } = supabase.storage.from('product-images').getPublicUrl(filename)
   return data.publicUrl

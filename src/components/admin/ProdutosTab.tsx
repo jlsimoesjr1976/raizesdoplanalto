@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
+import { compressImage } from '@/lib/imageCompress'
 import { Category, Product, PrepStation } from '@/types/database'
 import { formatCurrency } from '@/lib/utils'
 import { ProdutoFormModal } from './ProdutoFormModal'
@@ -138,7 +139,8 @@ function InlineNumber({ value, onSave, render, title }: {
 async function uploadProductImage(productId: string, file: File): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
   const filename = `${productId}-${Date.now()}.${ext}`
-  const { error } = await supabase.storage.from('product-images').upload(filename, file, { upsert: true })
+  const compressed = await compressImage(file)
+  const { error } = await supabase.storage.from('product-images').upload(filename, compressed, { upsert: true })
   if (error) throw error
   const { data } = supabase.storage.from('product-images').getPublicUrl(filename)
   return data.publicUrl

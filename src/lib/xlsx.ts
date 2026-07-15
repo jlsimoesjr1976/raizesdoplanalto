@@ -1,4 +1,7 @@
-import * as XLSX from 'xlsx'
+// xlsx é pesado (~400 KB): carregado sob demanda, fora do bundle inicial
+async function loadXlsx() {
+  return await import('xlsx')
+}
 
 // ── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -26,12 +29,13 @@ export interface ParsedRow {
 
 // ── Geração de planilha modelo ──────────────────────────────────────────────
 
-export function downloadTemplate(
+export async function downloadTemplate(
   fileName: string,
   sheetName: string,
   columns: ImportColumn[],
   extraInstructions: string[] = []
 ) {
+  const XLSX = await loadXlsx()
   const wb = XLSX.utils.book_new()
 
   // Aba principal: cabeçalho + linha de exemplo preenchida
@@ -77,6 +81,7 @@ export async function parseXlsxFile(
   file: File,
   columns: ImportColumn[]
 ): Promise<{ rows: ParsedRow[]; error?: string }> {
+  const XLSX = await loadXlsx()
   const buf = await file.arrayBuffer()
   const wb = XLSX.read(buf)
   const ws = wb.Sheets[wb.SheetNames[0]]

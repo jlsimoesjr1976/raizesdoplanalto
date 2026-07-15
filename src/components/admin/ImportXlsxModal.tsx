@@ -125,7 +125,7 @@ export function ImportXlsxModal({ open, onClose, onImported, config }: Props) {
               <Button
                 variant="outline"
                 onClick={() =>
-                  downloadTemplate(
+                  void downloadTemplate(
                     config.templateFileName,
                     config.sheetName,
                     config.columns,

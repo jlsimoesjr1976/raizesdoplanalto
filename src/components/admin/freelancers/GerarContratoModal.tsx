@@ -113,7 +113,7 @@ export function GerarContratoModal({ open, freelancer, onClose, onSaved }: Props
     if (!freelancer || !contratante) return
     setGenerating(true)
     try {
-      const doc = gerarContratoPdf(contratante, {
+      const doc = await gerarContratoPdf(contratante, {
         nome: freelancer.name,
         profissao: profissao.trim() || funcao.trim() || 'Freelancer',
         cpf: applyCpfMask(freelancer.cpf),

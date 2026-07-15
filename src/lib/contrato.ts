@@ -1,4 +1,4 @@
-import { jsPDF } from 'jspdf'
+import type { jsPDF } from 'jspdf'
 
 export interface ContratanteData {
   nome: string        // Razão social ou nome de exibição
@@ -37,7 +37,9 @@ function fmtValor(v: string) {
   return v.trim()
 }
 
-export function gerarContratoPdf(contratante: ContratanteData, c: ContratoData): jsPDF {
+export async function gerarContratoPdf(contratante: ContratanteData, c: ContratoData): Promise<jsPDF> {
+  // jspdf é pesado: carregado sob demanda
+  const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const marginX = 18
   const marginTop = 16

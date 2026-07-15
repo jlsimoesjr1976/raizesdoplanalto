@@ -1,12 +1,25 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { Toaster } from '@/components/ui/toaster'
 import Login from '@/pages/Login'
 import NotFound from '@/pages/NotFound'
-import AdminDashboard from '@/pages/admin/Dashboard'
-import Cardapio from '@/pages/Cardapio'
 import type { Role } from '@/types/database'
+
+// Code splitting: o cardápio do cliente e o painel admin são bundles
+// separados — o cliente no celular não baixa o código do admin (nem
+// xlsx/jspdf/recharts) e vice-versa.
+const AdminDashboard = lazy(() => import('@/pages/admin/Dashboard'))
+const Cardapio = lazy(() => import('@/pages/Cardapio'))
+
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+    </div>
+  )
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +65,7 @@ function AppRoutes() {
   }
 
   return (
+    <Suspense fallback={<PageLoader />}>
     <Routes>
       {/* Cardápio público para clientes (independente do login de staff) */}
       <Route path="/cardapio" element={<Cardapio />} />
@@ -79,6 +93,7 @@ function AppRoutes() {
       <Route path="/kitchen" element={<Navigate to="/admin" replace />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </Suspense>
   )
 }
 

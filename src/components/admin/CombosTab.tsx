@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
+import { compressImage } from '@/lib/imageCompress'
 import { Product, Combo } from '@/types/database'
 import { formatCurrency, cn } from '@/lib/utils'
 import { comboTotal, comboFinal, type ComboWithItems } from '@/lib/combos'
@@ -16,7 +17,8 @@ const COMBO_QK = ['combos']
 async function uploadComboImage(comboId: string, file: File): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
   const filename = `combo-${comboId}-${Date.now()}.${ext}`
-  const { error } = await supabase.storage.from('product-images').upload(filename, file, { upsert: true })
+  const compressed = await compressImage(file)
+  const { error } = await supabase.storage.from('product-images').upload(filename, compressed, { upsert: true })
   if (error) throw error
   const { data } = supabase.storage.from('product-images').getPublicUrl(filename)
   return data.publicUrl
