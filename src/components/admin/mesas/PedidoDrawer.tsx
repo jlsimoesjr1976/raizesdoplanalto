@@ -114,6 +114,7 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
     }
 
     await loadOrder()
+    onUpdated()
   }
 
   async function handleRemoveItem(item: OrderItem) {
@@ -139,6 +140,7 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
     }
 
     await loadOrder()
+    onUpdated()
   }
 
   function handlePrint() {
