@@ -14,7 +14,7 @@ const json = (body: unknown, status = 200) =>
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
-interface CartLine { product_id: string; quantity: number; notes?: string }
+interface CartLine { product_id?: string; combo_id?: string; quantity: number; notes?: string }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -34,26 +34,73 @@ Deno.serve(async (req) => {
     const { data: customer } = await admin.from('customers').select('id, name, phone, address, address_reference').eq('id', sess.customer_id).single()
     if (!customer) return json({ error: 'Cliente não encontrado.' }, 404)
 
-    // Carrega os produtos do carrinho a partir do banco (fonte da verdade)
-    const ids = [...new Set(items.map((i) => i.product_id))]
-    const { data: products } = await admin.from('products').select('id, name, price, prep_station, stock_quantity, active').in('id', ids)
+    // Carrega produtos e combos do carrinho a partir do banco (fonte da verdade)
+    const prodIds = [...new Set(items.filter((i) => i.product_id).map((i) => i.product_id!))]
+    const comboIds = [...new Set(items.filter((i) => i.combo_id).map((i) => i.combo_id!))]
+    const [{ data: products }, { data: combos }] = await Promise.all([
+      prodIds.length
+        ? admin.from('products').select('id, name, price, prep_station, stock_quantity, active').in('id', prodIds)
+        : Promise.resolve({ data: [] }),
+      comboIds.length
+        ? admin.from('combos').select('id, name, discount_percent, active, combo_items(quantity, products(id, name, price, prep_station, stock_quantity, active))').in('id', comboIds)
+        : Promise.resolve({ data: [] }),
+    ])
     const byId = new Map((products ?? []).map((p) => [p.id, p]))
+    const comboById = new Map((combos ?? []).map((c) => [c.id, c]))
 
-    // Valida e monta as linhas
+    // Valida e monta as linhas. Combos são expandidos: cada produto vai à sua
+    // fila de preparo, com o desconto aplicado no preço unitário, e o estoque
+    // é baixado por componente.
     const rows: { product_id: string; product_name: string; quantity: number; unit_price: number; notes: string | null; prep_station: string | null; kitchen_status: string }[] = []
-    let total = 0
+    // Demanda total por produto (soma de linhas avulsas + componentes de combos) p/ validar estoque
+    const demand = new Map<string, { name: string; stock: number; qty: number }>()
+
     for (const line of items) {
-      const p = byId.get(line.product_id)
       const qty = Math.floor(Number(line.quantity))
-      if (!p || !p.active) return json({ error: `Produto indisponível no carrinho.` }, 400)
-      if (!qty || qty < 1) return json({ error: `Quantidade inválida para ${p.name}.` }, 400)
-      if (p.stock_quantity < qty) return json({ error: `Estoque insuficiente para ${p.name}.` }, 409)
-      total += Number(p.price) * qty
-      rows.push({
-        product_id: p.id, product_name: p.name, quantity: qty, unit_price: Number(p.price),
-        notes: line.notes?.trim() || null, prep_station: p.prep_station ?? null, kitchen_status: 'pending',
-      })
+      if (!qty || qty < 1) return json({ error: 'Quantidade inválida no carrinho.' }, 400)
+
+      if (line.combo_id) {
+        const c = comboById.get(line.combo_id)
+        if (!c || !c.active) return json({ error: 'Combo indisponível no carrinho.' }, 400)
+        const comboItems = (c.combo_items ?? []) as { quantity: number; products: { id: string; name: string; price: number; prep_station: string | null; stock_quantity: number; active: boolean } }[]
+        if (comboItems.length === 0) return json({ error: `Combo ${c.name} sem produtos.` }, 400)
+        const factor = 1 - Number(c.discount_percent) / 100
+        for (const ci of comboItems) {
+          const p = ci.products
+          if (!p || !p.active) return json({ error: `Produto do combo ${c.name} indisponível.` }, 400)
+          const compQty = ci.quantity * qty
+          const d = demand.get(p.id) ?? { name: p.name, stock: Number(p.stock_quantity), qty: 0 }
+          d.qty += compQty
+          demand.set(p.id, d)
+          rows.push({
+            product_id: p.id,
+            product_name: `${p.name} (Combo: ${c.name})`,
+            quantity: compQty,
+            unit_price: Math.round(Number(p.price) * factor * 100) / 100,
+            notes: line.notes?.trim() || null,
+            prep_station: p.prep_station ?? null,
+            kitchen_status: 'pending',
+          })
+        }
+      } else {
+        const p = byId.get(line.product_id!)
+        if (!p || !p.active) return json({ error: `Produto indisponível no carrinho.` }, 400)
+        const d = demand.get(p.id) ?? { name: p.name, stock: Number(p.stock_quantity), qty: 0 }
+        d.qty += qty
+        demand.set(p.id, d)
+        rows.push({
+          product_id: p.id, product_name: p.name, quantity: qty, unit_price: Number(p.price),
+          notes: line.notes?.trim() || null, prep_station: p.prep_station ?? null, kitchen_status: 'pending',
+        })
+      }
     }
+
+    // Estoque suficiente para a demanda total de cada produto?
+    for (const d of demand.values()) {
+      if (d.stock < d.qty) return json({ error: `Estoque insuficiente para ${d.name}.` }, 409)
+    }
+
+    const total = rows.reduce((s, r) => s + r.unit_price * r.quantity, 0)
 
     // Cria o pedido
     const { data: order, error: oErr } = await admin.from('orders').insert({
@@ -78,10 +125,8 @@ Deno.serve(async (req) => {
       return json({ error: iErr.message }, 500)
     }
 
-    // Baixa de estoque
-    await Promise.all(rows.map((r) =>
-      admin.rpc('adjust_product_stock', { p_product_id: r.product_id, p_delta: -r.quantity })
-    ))
+    // Estoque: baixado automaticamente pelo trigger trg_deduct_stock no INSERT
+    // de order_items — não baixar manualmente aqui (duplicaria a baixa).
 
     return json({ ok: true, order_id: order.id, total })
   } catch (e) {

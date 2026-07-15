@@ -4,15 +4,18 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Minus, Plus, Search, ShoppingCart } from 'lucide-react'
+import { Minus, Plus, Search, ShoppingCart, Package2 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { formatCurrency } from '@/lib/utils'
 import type { Product, Category } from '@/types/database'
+import { comboAvailable, comboFinal, comboTotal, expandCombo, type ComboWithItems } from '@/lib/combos'
 
 interface CartItem {
   product: Product
   quantity: number
   notes: string
+  /** Presente quando o item veio da expansão de um combo */
+  comboKey?: string
 }
 
 interface Props {
@@ -24,6 +27,7 @@ interface Props {
 export function AdicionarItemModal({ open, onClose, onConfirm }: Props) {
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [combos, setCombos] = useState<ComboWithItems[]>([])
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [cart, setCart] = useState<CartItem[]>([])
@@ -38,12 +42,14 @@ export function AdicionarItemModal({ open, onClose, onConfirm }: Props) {
   }, [open])
 
   async function loadData() {
-    const [{ data: cats }, { data: prods }] = await Promise.all([
+    const [{ data: cats }, { data: prods }, { data: cbs }] = await Promise.all([
       supabase.from('categories').select('*').eq('active', true).order('sort_order'),
       supabase.from('products').select('*').eq('active', true).gte('stock_quantity', 1).order('name'),
+      supabase.from('combos').select('*, combo_items(*, products(*))').eq('active', true).order('name'),
     ])
     setCategories(cats ?? [])
     setProducts(prods ?? [])
+    setCombos(((cbs ?? []) as ComboWithItems[]).filter(comboAvailable))
   }
 
   const filtered = products.filter((p) => {
@@ -54,22 +60,41 @@ export function AdicionarItemModal({ open, onClose, onConfirm }: Props) {
 
   function addToCart(product: Product) {
     setCart((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id)
-      if (existing) return prev.map((i) => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i)
+      const existing = prev.find((i) => i.product.id === product.id && !i.comboKey)
+      if (existing) return prev.map((i) => (i.product.id === product.id && !i.comboKey) ? { ...i, quantity: i.quantity + 1 } : i)
       return [...prev, { product, quantity: 1, notes: '' }]
     })
   }
 
-  function updateQty(productId: string, delta: number) {
+  function addCombo(combo: ComboWithItems) {
+    // Expande o combo: cada produto entra com o preço já descontado e vai à sua fila de preparo
+    const expanded = expandCombo(combo, 1)
+    setCart((prev) => {
+      const next = [...prev]
+      for (const e of expanded) {
+        const idx = next.findIndex((i) => i.comboKey === combo.id && i.product.id === e.product.id)
+        if (idx >= 0) next[idx] = { ...next[idx], quantity: next[idx].quantity + e.quantity }
+        else next.push({
+          product: { ...e.product, name: e.display_name, price: e.unit_price },
+          quantity: e.quantity,
+          notes: '',
+          comboKey: combo.id,
+        })
+      }
+      return next
+    })
+  }
+
+  function updateQty(index: number, delta: number) {
     setCart((prev) =>
       prev
-        .map((i) => i.product.id === productId ? { ...i, quantity: i.quantity + delta } : i)
+        .map((i, idx) => idx === index ? { ...i, quantity: i.quantity + delta } : i)
         .filter((i) => i.quantity > 0)
     )
   }
 
-  function updateNotes(productId: string, notes: string) {
-    setCart((prev) => prev.map((i) => i.product.id === productId ? { ...i, notes } : i))
+  function updateNotes(index: number, notes: string) {
+    setCart((prev) => prev.map((i, idx) => idx === index ? { ...i, notes } : i))
   }
 
   const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0)
@@ -104,6 +129,12 @@ export function AdicionarItemModal({ open, onClose, onConfirm }: Props) {
             <Tabs value={activeCategory} onValueChange={setActiveCategory} className="flex-1 flex flex-col min-h-0">
               <TabsList className="flex-wrap h-auto gap-1 mb-3 justify-start bg-transparent px-0">
                 <TabsTrigger value="all" className="text-xs h-7">Todos</TabsTrigger>
+                {combos.length > 0 && (
+                  <TabsTrigger value="combos" className="text-xs h-7 gap-1">
+                    <Package2 className="w-3 h-3" />
+                    Combos
+                  </TabsTrigger>
+                )}
                 {categories.map((c) => (
                   <TabsTrigger key={c.id} value={c.id} className="text-xs h-7">{c.name}</TabsTrigger>
                 ))}
@@ -116,6 +147,28 @@ export function AdicionarItemModal({ open, onClose, onConfirm }: Props) {
                 ))}
                 <TabsContent value="all" className="mt-0">
                   <ProductGrid products={filtered} onAdd={addToCart} cart={cart} />
+                </TabsContent>
+                <TabsContent value="combos" className="mt-0">
+                  <div className="grid grid-cols-2 gap-2">
+                    {combos.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => addCombo(c)}
+                        className="text-left p-3 rounded-lg border bg-background hover:border-primary hover:bg-primary/5 transition-colors"
+                      >
+                        <p className="text-xs font-medium leading-tight line-clamp-2">{c.name}</p>
+                        <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5">
+                          {(c.combo_items ?? []).map((i) => `${i.quantity}x ${i.products?.name}`).join(', ')}
+                        </p>
+                        <div className="flex items-baseline gap-1.5 mt-1">
+                          <p className="text-sm font-bold text-primary">{formatCurrency(comboFinal(c))}</p>
+                          {Number(c.discount_percent) > 0 && (
+                            <p className="text-[10px] text-muted-foreground line-through">{formatCurrency(comboTotal(c))}</p>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </TabsContent>
               </div>
             </Tabs>
@@ -136,18 +189,18 @@ export function AdicionarItemModal({ open, onClose, onConfirm }: Props) {
               {cart.length === 0 && (
                 <p className="text-xs text-muted-foreground text-center mt-8">Nenhum item adicionado</p>
               )}
-              {cart.map((item) => (
-                <div key={item.product.id} className="space-y-1">
+              {cart.map((item, index) => (
+                <div key={`${item.comboKey ?? ''}-${item.product.id}`} className="space-y-1">
                   <div className="flex items-start justify-between gap-1">
                     <span className="text-xs font-medium leading-tight flex-1">{item.product.name}</span>
                     <span className="text-xs text-muted-foreground shrink-0">{formatCurrency(item.product.price)}</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => updateQty(item.product.id, -1)} className="w-6 h-6 rounded border flex items-center justify-center hover:bg-muted">
+                    <button onClick={() => updateQty(index, -1)} className="w-6 h-6 rounded border flex items-center justify-center hover:bg-muted">
                       <Minus className="w-3 h-3" />
                     </button>
                     <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
-                    <button onClick={() => updateQty(item.product.id, 1)} className="w-6 h-6 rounded border flex items-center justify-center hover:bg-muted">
+                    <button onClick={() => updateQty(index, 1)} className="w-6 h-6 rounded border flex items-center justify-center hover:bg-muted">
                       <Plus className="w-3 h-3" />
                     </button>
                     <span className="ml-auto text-xs font-medium">{formatCurrency(item.product.price * item.quantity)}</span>
@@ -155,7 +208,7 @@ export function AdicionarItemModal({ open, onClose, onConfirm }: Props) {
                   <Input
                     placeholder="Obs. (sem cebola...)"
                     value={item.notes}
-                    onChange={(e) => updateNotes(item.product.id, e.target.value)}
+                    onChange={(e) => updateNotes(index, e.target.value)}
                     className="h-6 text-xs px-2"
                   />
                 </div>
@@ -189,7 +242,7 @@ function ProductGrid({ products, onAdd, cart }: { products: Product[]; onAdd: (p
   return (
     <div className="grid grid-cols-2 gap-2">
       {products.map((p) => {
-        const qty = cart.find((i) => i.product.id === p.id)?.quantity ?? 0
+        const qty = cart.find((i) => i.product.id === p.id && !i.comboKey)?.quantity ?? 0
         return (
           <button
             key={p.id}

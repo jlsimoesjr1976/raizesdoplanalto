@@ -11,11 +11,18 @@ import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ShoppingCart, Plus, Minus, Search, UtensilsCrossed, LogOut, User, CheckCircle2, Loader2, Trash2, Eye, EyeOff } from 'lucide-react'
+import { ShoppingCart, Plus, Minus, Search, UtensilsCrossed, LogOut, User, CheckCircle2, Loader2, Trash2, Eye, EyeOff, Package2 } from 'lucide-react'
 import logoImg from '@/assets/logo.png'
 import type { Product, Category } from '@/types/database'
+import { comboAvailable, comboFinal, comboTotal, type ComboWithItems } from '@/lib/combos'
 
-interface CartItem { product: Product; quantity: number; notes: string }
+interface CartItem {
+  product: Product
+  quantity: number
+  notes: string
+  /** Presente quando a linha é um combo (product é um pseudo-produto com o preço final) */
+  comboId?: string
+}
 
 function CardapioInner() {
   const { customer, token, loading: authLoading, logout } = useCustomer()
@@ -43,6 +50,13 @@ function CardapioInner() {
       return (data ?? []) as Product[]
     },
   })
+  const { data: combos = [] } = useQuery({
+    queryKey: ['pub-combos'],
+    queryFn: async () => {
+      const { data } = await supabase.from('combos').select('*, combo_items(*, products(*))').eq('active', true).eq('show_in_menu', true).order('name')
+      return ((data ?? []) as ComboWithItems[]).filter(comboAvailable)
+    },
+  })
   const { data: lojaAberta = true } = useQuery({
     queryKey: ['pub-loja-aberta'],
     refetchInterval: 30000,
@@ -63,6 +77,10 @@ function CardapioInner() {
     })
   }, [products, categories, activeCat, search])
 
+  const visibleCombos = useMemo(() => combos.filter((c) =>
+    !search || c.name.toLowerCase().includes(search.toLowerCase())
+  ), [combos, search])
+
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0)
   const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0)
 
@@ -71,6 +89,16 @@ function CardapioInner() {
       const ex = prev.find((i) => i.product.id === p.id)
       if (ex) return prev.map((i) => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i)
       return [...prev, { product: p, quantity: 1, notes: '' }]
+    })
+  }
+
+  function addComboToCart(c: ComboWithItems) {
+    // Combo entra como uma linha única, com o preço final (o servidor expande e valida)
+    const pseudo = { id: c.id, name: `Combo: ${c.name}`, price: comboFinal(c), image_url: c.image_url } as Product
+    setCart((prev) => {
+      const ex = prev.find((i) => i.comboId === c.id)
+      if (ex) return prev.map((i) => i.comboId === c.id ? { ...i, quantity: i.quantity + 1 } : i)
+      return [...prev, { product: pseudo, quantity: 1, notes: '', comboId: c.id }]
     })
   }
   function updateQty(id: string, delta: number) {
@@ -99,7 +127,11 @@ function CardapioInner() {
   async function doPlaceOrder(tk: string) {
     if (!tk) return
     setPlacing(true)
-    const res = await placeOrder(tk, cart.map((i) => ({ product_id: i.product.id, quantity: i.quantity, notes: i.notes || undefined })), orderNotes || undefined)
+    const res = await placeOrder(tk, cart.map((i) => (
+      i.comboId
+        ? { combo_id: i.comboId, quantity: i.quantity, notes: i.notes || undefined }
+        : { product_id: i.product.id, quantity: i.quantity, notes: i.notes || undefined }
+    )), orderNotes || undefined)
     setPlacing(false)
     if (res.error) { alert(res.error); return }
     setCart([]); setOrderNotes(''); setCartOpen(false); setSuccess(res.order_id ?? 'ok')
@@ -145,6 +177,7 @@ function CardapioInner() {
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
             <CatChip label="Todos" active={activeCat === 'all'} onClick={() => setActiveCat('all')} />
+            {combos.length > 0 && <CatChip label="Combos" active={activeCat === 'combos'} onClick={() => setActiveCat('combos')} />}
             {categories.map((c) => (
               <CatChip key={c.id} label={c.name} active={activeCat === c.id} onClick={() => setActiveCat(c.id)} />
             ))}
@@ -153,9 +186,57 @@ function CardapioInner() {
       </div>
 
       {/* Produtos */}
-      <main className="max-w-4xl mx-auto px-4 py-4">
+      <main className="max-w-4xl mx-auto px-4 py-4 space-y-4">
         {isLoading && <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{[...Array(6)].map((_, i) => <div key={i} className="h-52 rounded-xl bg-neutral-200 animate-pulse" />)}</div>}
-        {!isLoading && filtered.length === 0 && (
+
+        {/* Combos */}
+        {(activeCat === 'all' || activeCat === 'combos') && visibleCombos.length > 0 && (
+          <div>
+            {activeCat === 'all' && <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5"><Package2 className="w-4 h-4" /> Combos</h2>}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {visibleCombos.map((c) => {
+                const qty = cart.find((i) => i.comboId === c.id)?.quantity ?? 0
+                const total = comboTotal(c)
+                const final = comboFinal(c)
+                return (
+                  <div key={c.id} className="bg-white rounded-xl border-2 border-amber-200 overflow-hidden flex flex-col">
+                    <div className="h-28 sm:h-32 bg-neutral-100 flex items-center justify-center overflow-hidden relative">
+                      {c.image_url ? <img src={c.image_url} alt={c.name} className="w-full h-full object-cover" /> : <Package2 className="w-8 h-8 text-neutral-300" />}
+                      {Number(c.discount_percent) > 0 && (
+                        <span className="absolute top-2 left-2 bg-amber-400 text-black text-[10px] font-bold px-1.5 py-0.5 rounded">
+                          -{Number(c.discount_percent).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-3 flex flex-col gap-1.5 flex-1">
+                      <p className="text-sm font-semibold leading-tight line-clamp-2">{c.name}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {(c.combo_items ?? []).map((i) => `${i.quantity}x ${i.products?.name}`).join(', ')}
+                      </p>
+                      <div className="mt-auto flex items-center justify-between pt-1">
+                        <div className="leading-tight">
+                          {final < total && <span className="block text-[10px] text-muted-foreground line-through">{formatCurrency(total)}</span>}
+                          <span className="font-bold text-green-700">{formatCurrency(final)}</span>
+                        </div>
+                        {qty === 0 ? (
+                          <Button size="sm" className="h-8 px-2.5" onClick={() => addComboToCart(c)}><Plus className="w-4 h-4" /></Button>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => updateQty(c.id, -1)} className="w-7 h-7 rounded-md border flex items-center justify-center bg-white"><Minus className="w-3.5 h-3.5" /></button>
+                            <span className="w-5 text-center text-sm font-semibold">{qty}</span>
+                            <button onClick={() => updateQty(c.id, 1)} className="w-7 h-7 rounded-md border flex items-center justify-center bg-white"><Plus className="w-3.5 h-3.5" /></button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {!isLoading && filtered.length === 0 && visibleCombos.length === 0 && (
           <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
             <UtensilsCrossed className="w-10 h-10 opacity-30" />
             <p className="text-sm">Nenhum item encontrado.</p>

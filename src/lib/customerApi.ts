@@ -10,7 +10,8 @@ export interface CustomerAccount {
 }
 
 export interface CartLine {
-  product_id: string
+  product_id?: string
+  combo_id?: string
   quantity: number
   notes?: string
 }

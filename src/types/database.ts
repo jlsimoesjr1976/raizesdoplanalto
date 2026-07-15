@@ -33,6 +33,25 @@ export interface Category {
   created_at: string
 }
 
+export interface Combo {
+  id: string
+  name: string
+  discount_percent: number
+  image_url: string | null
+  active: boolean
+  show_in_menu: boolean
+  created_at: string
+  combo_items?: ComboItem[]
+}
+
+export interface ComboItem {
+  id: string
+  combo_id: string
+  product_id: string
+  quantity: number
+  products?: Product
+}
+
 export interface Product {
   id: string
   category_id: string | null
