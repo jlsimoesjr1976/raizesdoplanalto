@@ -149,7 +149,7 @@ function ComboFormModal({ open, combo, onClose, onSaved }: {
     setSearch('')
     if (combo) {
       setName(combo.name)
-      setLines((combo.combo_items ?? []).filter((i) => i.products).map((i) => ({ product: i.products, quantity: i.quantity })))
+      setLines((combo.combo_items ?? []).filter((i) => !!i.products).map((i) => ({ product: i.products as Product, quantity: i.quantity })))
     } else {
       setName('')
       setLines([])
@@ -418,7 +418,7 @@ export function CombosTab() {
       await queryClient.cancelQueries({ queryKey: COMBO_QK })
       const prev = queryClient.getQueryData<ComboWithItems[]>(COMBO_QK)
       queryClient.setQueryData<ComboWithItems[]>(COMBO_QK, (old) =>
-        (old ?? []).map((c) => (c.id === id ? { ...c, ...patch } : c)))
+        (old ?? []).map((c) => (c.id === id ? ({ ...c, ...patch } as ComboWithItems) : c)))
       return { prev }
     },
     onError: (_e, _v, ctx) => { if (ctx?.prev) queryClient.setQueryData(COMBO_QK, ctx.prev) },
