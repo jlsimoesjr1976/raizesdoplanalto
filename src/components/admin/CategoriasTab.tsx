@@ -6,13 +6,39 @@ import { CategoriaFormModal } from './CategoriaFormModal'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Plus, Pencil, Trash2, Tag, Eye, EyeOff } from 'lucide-react'
+import { Plus, Pencil, Trash2, Tag, Eye, EyeOff, LayoutGrid, List } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+type ViewMode = 'grid' | 'list'
+
+function MenuToggle({ visible, onToggle, small }: { visible: boolean; onToggle: () => void; small?: boolean }) {
+  return (
+    <button
+      type="button"
+      title={visible ? 'Visível no cardápio do cliente (clique para ocultar)' : 'Oculta no cardápio do cliente (clique para exibir)'}
+      onClick={onToggle}
+      className={cn(
+        'inline-flex items-center gap-1 font-medium px-2 py-0.5 rounded-full transition-colors',
+        small ? 'text-[10px]' : 'text-xs',
+        visible ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+      )}
+    >
+      {visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+      {visible ? 'No cardápio' : 'Oculta'}
+    </button>
+  )
+}
 
 export function CategoriasTab() {
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Category | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('categorias-view') as ViewMode) || 'grid')
+
+  const changeView = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem('categorias-view', mode)
+  }
 
   const { data: categories = [], isLoading } = useQuery({
     queryKey: ['categories'],
@@ -76,10 +102,28 @@ export function CategoriasTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Categorias</h2>
-        <Button size="sm" onClick={handleNew}>
-          <Plus className="w-4 h-4 mr-1" />
-          Nova Categoria
-        </Button>
+        <div className="flex gap-2">
+          <div className="flex rounded-md border overflow-hidden">
+            <button
+              title="Visualização em grade"
+              onClick={() => changeView('grid')}
+              className={cn('px-2.5 flex items-center', viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              title="Visualização em lista"
+              onClick={() => changeView('list')}
+              className={cn('px-2.5 flex items-center border-l', viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
+          <Button size="sm" onClick={handleNew}>
+            <Plus className="w-4 h-4 mr-1" />
+            Nova Categoria
+          </Button>
+        </div>
       </div>
 
       {isLoading && (
@@ -101,7 +145,36 @@ export function CategoriasTab() {
         </div>
       )}
 
-      {!isLoading && categories.length > 0 && (
+      {!isLoading && categories.length > 0 && viewMode === 'list' && (
+        <div className="space-y-2">
+          {categories.map((cat) => (
+            <div key={cat.id} className="flex items-center gap-3 p-2.5 rounded-lg border bg-card hover:shadow-sm transition-shadow">
+              <div className="w-9 h-9 rounded-md bg-muted shrink-0 flex items-center justify-center">
+                <Tag className="w-4 h-4 text-muted-foreground/50" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium truncate">{cat.name}</span>
+                  {!cat.active && <Badge variant="secondary" className="text-[10px]">Inativo</Badge>}
+                  <MenuToggle small visible={cat.show_in_menu} onToggle={() => menuMutation.mutate({ id: cat.id, show: !cat.show_in_menu })} />
+                </div>
+                {cat.description && <p className="text-xs text-muted-foreground truncate mt-0.5">{cat.description}</p>}
+              </div>
+              <span className="text-xs text-muted-foreground shrink-0">Ordem: {cat.sort_order}</span>
+              <div className="flex gap-1.5 shrink-0">
+                <Button size="sm" variant="outline" title="Editar" onClick={() => handleEdit(cat)}>
+                  <Pencil className="w-3.5 h-3.5" />
+                </Button>
+                <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" title="Excluir" onClick={() => handleDelete(cat)} disabled={deleteMutation.isPending}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!isLoading && categories.length > 0 && viewMode === 'grid' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {categories.map((cat) => (
             <Card key={cat.id} className="overflow-hidden">
@@ -119,18 +192,7 @@ export function CategoriasTab() {
                     <Badge variant={cat.active ? 'default' : 'secondary'} className="text-xs">
                       {cat.active ? 'Ativo' : 'Inativo'}
                     </Badge>
-                    <button
-                      type="button"
-                      title={cat.show_in_menu ? 'Visível no cardápio do cliente (clique para ocultar)' : 'Oculta no cardápio do cliente (clique para exibir)'}
-                      onClick={() => menuMutation.mutate({ id: cat.id, show: !cat.show_in_menu })}
-                      className={cn(
-                        'inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full transition-colors',
-                        cat.show_in_menu ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                      )}
-                    >
-                      {cat.show_in_menu ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                      {cat.show_in_menu ? 'No cardápio' : 'Oculta'}
-                    </button>
+                    <MenuToggle visible={cat.show_in_menu} onToggle={() => menuMutation.mutate({ id: cat.id, show: !cat.show_in_menu })} />
                   </div>
                 </div>
 

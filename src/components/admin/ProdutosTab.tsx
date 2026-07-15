@@ -84,6 +84,57 @@ function MenuVisibilityButton({ visible, onToggle }: { visible: boolean; onToggl
   )
 }
 
+/** Valor numérico editável inline: clique para editar, Enter/blur salva, Esc cancela */
+function InlineNumber({ value, onSave, render, title }: {
+  value: number
+  onSave: (v: number) => void
+  render: (v: number) => React.ReactNode
+  title: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [val, setVal] = useState('')
+
+  function start(e: React.MouseEvent) {
+    e.stopPropagation()
+    setVal(String(value).replace('.', ','))
+    setEditing(true)
+  }
+
+  function commit() {
+    setEditing(false)
+    const n = parseFloat(val.replace(/\./g, '').replace(',', '.'))
+    if (!isNaN(n) && n >= 0 && n !== value) onSave(n)
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit()
+          if (e.key === 'Escape') setEditing(false)
+        }}
+        onClick={(e) => e.stopPropagation()}
+        inputMode="decimal"
+        className="w-full h-6 px-1 text-sm text-center border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+    )
+  }
+  return (
+    <button
+      type="button"
+      title={`${title} (clique para editar)`}
+      onClick={start}
+      className="w-full rounded hover:bg-muted/70 transition-colors cursor-text"
+    >
+      {render(value)}
+    </button>
+  )
+}
+
 async function uploadProductImage(productId: string, file: File): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
   const filename = `${productId}-${Date.now()}.${ext}`
@@ -102,12 +153,13 @@ interface ProductCardProps {
   onDelete: () => void
   onCyclePrep: () => void
   onToggleMenu: () => void
+  onUpdateField: (patch: Partial<Pick<Product, 'price' | 'cost_price' | 'stock_quantity'>>) => void
   duplicating: boolean
   deleting: boolean
   onImageUpdated: () => void
 }
 
-function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, onToggleMenu, duplicating, deleting, onImageUpdated }: ProductCardProps) {
+function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, onToggleMenu, onUpdateField, duplicating, deleting, onImageUpdated }: ProductCardProps) {
   const [uploading, setUploading] = useState(false)
   const [localImage, setLocalImage] = useState<string | null>(p.image_url ?? null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -181,15 +233,45 @@ function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onD
           <p className="text-xs text-muted-foreground line-clamp-2">{p.description}</p>
         )}
 
-        <div className="flex items-center justify-between">
-          <p className="text-lg font-bold text-green-600">{formatCurrency(p.price)}</p>
-          <div className={`flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-            p.stock_quantity <= 0 ? 'bg-red-100 text-red-700'
-            : p.stock_quantity <= 5 ? 'bg-amber-100 text-amber-700'
-            : 'bg-muted text-muted-foreground'
+        {/* Venda / Custo / Estoque — editáveis inline */}
+        <div className="grid grid-cols-3 gap-1.5 text-center">
+          <div className="rounded-md border bg-muted/30 px-1 py-1">
+            <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Venda</p>
+            <InlineNumber
+              value={p.price}
+              title="Preço de venda"
+              onSave={(v) => onUpdateField({ price: v })}
+              render={(v) => <span className="text-sm font-bold text-green-600">{formatCurrency(v)}</span>}
+            />
+          </div>
+          <div className="rounded-md border bg-muted/30 px-1 py-1">
+            <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Custo</p>
+            <InlineNumber
+              value={p.cost_price}
+              title="Preço de custo"
+              onSave={(v) => onUpdateField({ cost_price: v })}
+              render={(v) => <span className="text-sm font-medium">{formatCurrency(v)}</span>}
+            />
+          </div>
+          <div className={`rounded-md border px-1 py-1 ${
+            p.stock_quantity <= 0 ? 'bg-red-50 border-red-200'
+            : p.stock_quantity <= 5 ? 'bg-amber-50 border-amber-200'
+            : 'bg-muted/30'
           }`}>
-            {p.stock_quantity <= 0 ? <AlertTriangle className="w-3 h-3" /> : <Package className="w-3 h-3" />}
-            {p.stock_quantity <= 0 ? 'Sem estoque' : `${p.stock_quantity} un`}
+            <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Estoque</p>
+            <InlineNumber
+              value={p.stock_quantity}
+              title="Quantidade em estoque"
+              onSave={(v) => onUpdateField({ stock_quantity: v })}
+              render={(v) => (
+                <span className={`inline-flex items-center gap-1 text-sm font-medium ${
+                  v <= 0 ? 'text-red-700' : v <= 5 ? 'text-amber-700' : ''
+                }`}>
+                  {v <= 0 ? <AlertTriangle className="w-3 h-3" /> : <Package className="w-3 h-3" />}
+                  {v} un
+                </span>
+              )}
+            />
           </div>
         </div>
 
@@ -353,6 +435,24 @@ export function ProdutosTab() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
   })
 
+  const fieldMutation = useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Partial<Pick<Product, 'price' | 'cost_price' | 'stock_quantity'>> }) => {
+      const { error } = await supabase.from('products').update(patch).eq('id', id)
+      if (error) throw error
+    },
+    onMutate: async ({ id, patch }) => {
+      await queryClient.cancelQueries({ queryKey: ['products'] })
+      const prev = queryClient.getQueryData<ProductWithCategory[]>(['products'])
+      queryClient.setQueryData<ProductWithCategory[]>(['products'], (old) =>
+        (old ?? []).map((p) => (p.id === id ? { ...p, ...patch } : p)))
+      return { prev }
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['products'], ctx.prev)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
+  })
+
   const handleDelete = (p: ProductWithCategory) => {
     if (!confirm(`Excluir o produto "${p.name}"? Esta ação não pode ser desfeita.`)) return
     deleteMutation.mutate(p.id)
@@ -505,6 +605,7 @@ export function ProdutosTab() {
               onDelete={() => handleDelete(p)}
               onCyclePrep={() => prepMutation.mutate({ id: p.id, station: nextPrepStation(p.prep_station) })}
               onToggleMenu={() => menuMutation.mutate({ id: p.id, show: !p.show_in_menu })}
+              onUpdateField={(patch) => fieldMutation.mutate({ id: p.id, patch })}
               duplicating={duplicateMutation.isPending}
               deleting={deleteMutation.isPending}
               onImageUpdated={() => queryClient.invalidateQueries({ queryKey: ['products'] })}
