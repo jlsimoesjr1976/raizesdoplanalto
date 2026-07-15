@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Plus, Trash2, Clock, ChefHat, CheckCircle2, Truck,
   Users, UserCheck, Receipt, CircleDollarSign, Pencil, Check, User, Phone, Printer,
@@ -42,6 +43,7 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
   const [editingPeople, setEditingPeople] = useState(false)
   const [peopleInput, setPeopleInput] = useState('')
   const [liberando, setLiberando] = useState(false)
+  const [removingItem, setRemovingItem] = useState<OrderItem | null>(null)
 
   const loadOrder = useCallback(async () => {
     if (!orderId) return
@@ -117,11 +119,9 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
     onUpdated()
   }
 
-  async function handleRemoveItem(item: OrderItem) {
-    const devolver = window.confirm(
-      `Excluir ${item.quantity}x ${item.product_name}.\n\nDeseja devolver este item ao estoque?\n\nOK = devolver ao estoque\nCancelar = não devolver`
-    )
-
+  /** Exclui o item; `devolver` decide se o estoque é restituído */
+  async function confirmRemoveItem(item: OrderItem, devolver: boolean) {
+    setRemovingItem(null)
     await supabase.from('order_items').delete().eq('id', item.id)
 
     // O trigger trg_restore_stock devolve ao estoque automaticamente no DELETE.
@@ -321,7 +321,7 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
                     </div>
                     {podeExcluirItem && order?.status === 'open' && item.kitchen_status === 'pending' && (
                       <button
-                        onClick={() => handleRemoveItem(item)}
+                        onClick={() => setRemovingItem(item)}
                         className="text-muted-foreground hover:text-destructive transition-colors mt-0.5"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -401,6 +401,34 @@ export function PedidoDrawer({ open, onClose, orderId, onUpdated }: Props) {
           onClose()
         }}
       />
+
+      {/* Exclusão de item: escolha explícita sobre a devolução ao estoque */}
+      <Dialog open={!!removingItem} onOpenChange={(v) => !v && setRemovingItem(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Excluir item</DialogTitle>
+          </DialogHeader>
+          {removingItem && (
+            <div className="space-y-4">
+              <p className="text-sm">
+                Excluir <span className="font-semibold">{removingItem.quantity}x {removingItem.product_name}</span> da comanda.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                O que fazer com o estoque? Se o item ainda não foi preparado/entregue, devolva ao estoque.
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button onClick={() => confirmRemoveItem(removingItem, true)}>
+                  Excluir e devolver ao estoque
+                </Button>
+                <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => confirmRemoveItem(removingItem, false)}>
+                  Excluir sem devolver (perda/consumo)
+                </Button>
+                <Button variant="ghost" onClick={() => setRemovingItem(null)}>Cancelar</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
