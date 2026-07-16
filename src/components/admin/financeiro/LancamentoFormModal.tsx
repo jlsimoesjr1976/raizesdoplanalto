@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -31,6 +32,36 @@ interface BeneficiaryOption {
 }
 
 const MAX_ATTACHMENTS = 5
+
+// ── Recorrência ─────────────────────────────────────────────────────────────
+type RecurrenceType = 'diaria' | 'semanal' | 'quinzenal' | 'mensal' | 'semestral' | 'anual'
+
+const RECURRENCE_OPTIONS: { value: RecurrenceType; label: string }[] = [
+  { value: 'diaria', label: 'Diária' },
+  { value: 'semanal', label: 'Semanal' },
+  { value: 'quinzenal', label: 'Quinzenal' },
+  { value: 'mensal', label: 'Mensal' },
+  { value: 'semestral', label: 'Semestral' },
+  { value: 'anual', label: 'Anual' },
+]
+
+/**
+ * Data da i-ésima ocorrência (i = 0 é o próprio vencimento base).
+ * Para meses, o dia é preservado quando possível (31/01 → 28/02 → 31/03).
+ */
+function recurrenceDate(baseISO: string, tipo: RecurrenceType, i: number): string {
+  const [y, m, d] = baseISO.split('-').map(Number)
+  if (tipo === 'diaria' || tipo === 'semanal' || tipo === 'quinzenal') {
+    const days = tipo === 'diaria' ? 1 : tipo === 'semanal' ? 7 : 14
+    const dt = new Date(Date.UTC(y, m - 1, d + days * i))
+    return dt.toISOString().split('T')[0]
+  }
+  const months = tipo === 'mensal' ? 1 : tipo === 'semestral' ? 6 : 12
+  const target = new Date(Date.UTC(y, m - 1 + months * i, 1))
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate()
+  target.setUTCDate(Math.min(d, lastDay))
+  return target.toISOString().split('T')[0]
+}
 
 function fileIcon(name: string) {
   const ext = name.split('.').pop()?.toLowerCase() ?? ''
@@ -58,6 +89,9 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [recurrent, setRecurrent] = useState(false)
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('mensal')
+  const [recurrenceCount, setRecurrenceCount] = useState('12')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const label = type === 'payment' ? 'Pagamento' : 'Recebimento'
@@ -102,6 +136,9 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
         setAttachments([])
         setBeneficiary('')
       }
+      setRecurrent(false)
+      setRecurrenceType('mensal')
+      setRecurrenceCount('12')
     }
   }, [open, entry])
 
@@ -148,6 +185,12 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
     if (!amount || isNaN(value) || value <= 0) { setError('Informe um valor válido.'); return }
     if (!entryDate) { setError('Informe a data.'); return }
 
+    const count = recurrent ? Math.floor(Number(recurrenceCount)) : 1
+    if (recurrent && (!count || count < 2 || count > 120)) {
+      setError('Informe uma duração entre 2 e 120 ocorrências.')
+      return
+    }
+
     setSaving(true)
     const [benType, benId] = beneficiary ? beneficiary.split(':') : [null, null]
     const benOption = beneficiaries.find((b) => b.type === benType && b.id === benId)
@@ -163,9 +206,20 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
       beneficiary_name: benOption?.name ?? null,
     }
 
-    const { error: err } = entry
-      ? await supabase.from('financial_entries').update(payload).eq('id', entry.id)
-      : await supabase.from('financial_entries').insert(payload)
+    let err
+    if (entry) {
+      ({ error: err } = await supabase.from('financial_entries').update(payload).eq('id', entry.id))
+    } else if (recurrent && count > 1) {
+      // Recorrência: N lançamentos iguais, vencimentos a partir da 1ª data
+      const rows = Array.from({ length: count }, (_, i) => ({
+        ...payload,
+        description: `${payload.description} (${i + 1}/${count})`,
+        entry_date: recurrenceDate(entryDate, recurrenceType, i),
+      }))
+      ;({ error: err } = await supabase.from('financial_entries').insert(rows))
+    } else {
+      ({ error: err } = await supabase.from('financial_entries').insert(payload))
+    }
 
     setSaving(false)
     if (err) { setError('Erro ao salvar: ' + err.message); return }
@@ -253,6 +307,61 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
               />
             </div>
           </div>
+
+          {/* Recorrência — apenas em novos lançamentos */}
+          {!entry && (
+            <div className="rounded-lg border p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="fin-recurrent" className="cursor-pointer">{label} recorrente</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Repete este lançamento automaticamente a partir da data informada.
+                  </p>
+                </div>
+                <Switch id="fin-recurrent" checked={recurrent} onCheckedChange={setRecurrent} />
+              </div>
+
+              {recurrent && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Tipo *</Label>
+                      <Select value={recurrenceType} onValueChange={(v) => setRecurrenceType(v as RecurrenceType)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RECURRENCE_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="fin-rec-count">Duração *</Label>
+                      <Input
+                        id="fin-rec-count"
+                        type="number"
+                        min={2}
+                        max={120}
+                        value={recurrenceCount}
+                        onChange={(e) => setRecurrenceCount(e.target.value)}
+                        placeholder="12"
+                      />
+                    </div>
+                  </div>
+                  {entryDate && Number(recurrenceCount) >= 2 && Number(recurrenceCount) <= 120 && (
+                    <p className="text-xs text-muted-foreground">
+                      Serão criados <span className="font-semibold">{Math.floor(Number(recurrenceCount))} lançamentos</span> de{' '}
+                      <span className="font-semibold">{formatCurrency(Number(amount) || 0)}</span>: o 1º em{' '}
+                      {new Date(entryDate + 'T12:00:00').toLocaleDateString('pt-BR')} e o último em{' '}
+                      {new Date(recurrenceDate(entryDate, recurrenceType, Math.floor(Number(recurrenceCount)) - 1) + 'T12:00:00').toLocaleDateString('pt-BR')}.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Observações */}
           <div className="space-y-1.5">
