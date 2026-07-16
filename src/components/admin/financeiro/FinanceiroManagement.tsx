@@ -37,6 +37,17 @@ function monthStartStr(): string {
   return toDateStr(d)
 }
 
+function weekEndStr(): string {
+  const d = new Date()
+  d.setDate(d.getDate() - d.getDay() + 6) // sábado
+  return toDateStr(d)
+}
+
+function monthEndStr(): string {
+  const d = new Date()
+  return toDateStr(new Date(d.getFullYear(), d.getMonth() + 1, 0))
+}
+
 function formatDate(dateStr: string) {
   const [y, m, d] = dateStr.split('-')
   return `${d}/${m}/${y}`
@@ -85,10 +96,22 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
   const totalWeek = sum(weekStart)
   const totalMonth = sum(monthStart)
 
+  // A vencer: lançamentos em aberto (não baixados) de hoje até o fim do período
+  const weekEnd = weekEndStr()
+  const monthEnd = monthEndStr()
+  const sumDue = (until: string) =>
+    entries
+      .filter((e) => !e.paid && e.entry_date >= today && e.entry_date <= until)
+      .reduce((s, e) => s + Number(e.amount), 0)
+  const dueWeek = sumDue(weekEnd)
+  const dueMonth = sumDue(monthEnd)
+
   const cards = [
     { title: 'Total do Dia', value: totalDay, icon: CalendarClock, hint: formatDate(today) },
     { title: 'Acumulado da Semana', value: totalWeek, icon: CalendarRange, hint: `desde ${formatDate(weekStart)} (dom)` },
     { title: 'Acumulado do Mês', value: totalMonth, icon: CalendarDays, hint: `desde ${formatDate(monthStart)}` },
+    { title: 'A vencer na semana', value: dueWeek, icon: CalendarRange, hint: `em aberto até ${formatDate(weekEnd)}`, due: true },
+    { title: 'A vencer no mês atual', value: dueMonth, icon: CalendarDays, hint: `em aberto até ${formatDate(monthEnd)}`, due: true },
   ]
 
   const filtered = entries.filter((e) => {
@@ -113,15 +136,15 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
   return (
     <div className="space-y-4">
       {/* Cards de totais */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {cards.map((c) => (
-          <Card key={c.title} className="border shadow-sm">
+          <Card key={c.title} className={cn('border shadow-sm', c.due && 'bg-amber-50/60 border-amber-200')}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-sm text-muted-foreground">{c.title}</p>
-                <c.icon className={cn('w-4 h-4', accentText)} />
+                <c.icon className={cn('w-4 h-4', c.due ? 'text-amber-600' : accentText)} />
               </div>
-              <p className={cn('text-xl font-bold', accentText)}>{formatCurrency(c.value)}</p>
+              <p className={cn('text-xl font-bold', c.due ? 'text-amber-700' : accentText)}>{formatCurrency(c.value)}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{c.hint}</p>
             </CardContent>
           </Card>
