@@ -8,7 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Plus, Search, Pencil, Trash2, Paperclip, CalendarDays,
   ArrowDownCircle, ArrowUpCircle, Wallet, CalendarRange, CalendarClock, User, History,
-  DollarSign, CheckCircle2, FileText,
+  DollarSign, CheckCircle2, FileText, AlertTriangle,
 } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import { LancamentoFormModal } from './LancamentoFormModal'
@@ -107,6 +107,11 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
   const dueWeek = sumDue(weekEnd)
   const dueMonth = sumDue(monthEnd)
 
+  // Vencidos: em aberto com vencimento anterior a hoje
+  const overdue = entries
+    .filter((e) => !e.paid && e.entry_date < today)
+    .reduce((s, e) => s + Number(e.amount), 0)
+
   // Predicado de cada card — o mesmo usado para somar o valor exibido
   const cardPredicates: Record<string, (e: FinancialEntry) => boolean> = {
     day: (e) => e.entry_date === today,
@@ -114,6 +119,7 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
     month: (e) => e.entry_date >= monthStart && e.entry_date <= today,
     dueWeek: (e) => !e.paid && e.entry_date >= today && e.entry_date <= weekEnd,
     dueMonth: (e) => !e.paid && e.entry_date >= today && e.entry_date <= monthEnd,
+    overdue: (e) => !e.paid && e.entry_date < today,
   }
 
   const cards = [
@@ -122,6 +128,7 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
     { key: 'month', title: 'Acumulado do Mês', value: totalMonth, icon: CalendarDays, hint: `desde ${formatDate(monthStart)}` },
     { key: 'dueWeek', title: 'A vencer na semana', value: dueWeek, icon: CalendarRange, hint: `em aberto até ${formatDate(weekEnd)}`, due: true },
     { key: 'dueMonth', title: 'A vencer no mês atual', value: dueMonth, icon: CalendarDays, hint: `em aberto até ${formatDate(monthEnd)}`, due: true },
+    { key: 'overdue', title: 'Vencidos', value: overdue, icon: AlertTriangle, hint: `em aberto antes de ${formatDate(today)}`, overdue: true },
   ]
 
   const filtered = entries.filter((e) => {
@@ -147,7 +154,7 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
   return (
     <div className="space-y-4">
       {/* Cards de totais */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         {cards.map((c) => (
           <Card
             key={c.title}
@@ -159,15 +166,16 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
             className={cn(
               'border shadow-sm cursor-pointer transition-shadow hover:shadow-md select-none',
               c.due && 'bg-amber-50/60 border-amber-200',
+              c.overdue && 'bg-red-50/60 border-red-200',
               cardFilter === c.key && 'ring-2 ring-primary border-primary'
             )}
           >
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-sm text-muted-foreground">{c.title}</p>
-                <c.icon className={cn('w-4 h-4', c.due ? 'text-amber-600' : accentText)} />
+                <c.icon className={cn('w-4 h-4', c.overdue ? 'text-red-600' : c.due ? 'text-amber-600' : accentText)} />
               </div>
-              <p className={cn('text-xl font-bold', c.due ? 'text-amber-700' : accentText)}>{formatCurrency(c.value)}</p>
+              <p className={cn('text-xl font-bold', c.overdue ? 'text-red-700' : c.due ? 'text-amber-700' : accentText)}>{formatCurrency(c.value)}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{c.hint}</p>
             </CardContent>
           </Card>
