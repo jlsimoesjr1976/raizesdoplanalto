@@ -22,7 +22,8 @@ import {
   FolderPlus,
   ChevronDown,
   ReceiptText,
-, Calculator } from 'lucide-react'
+  Calculator,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import logoImg from '@/assets/logo.png'
 import InsumosManagement from '@/components/admin/InsumosManagement'
