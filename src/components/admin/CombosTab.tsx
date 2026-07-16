@@ -10,7 +10,9 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Plus, Minus, Pencil, Trash2, Package2, Camera, Loader2, Eye, EyeOff, Search, Percent } from 'lucide-react'
+import { Plus, Minus, Pencil, Trash2, Package2, Camera, Loader2, Eye, EyeOff, Search, Percent, LayoutGrid, List } from 'lucide-react'
+
+type ViewMode = 'grid' | 'list'
 
 const COMBO_QK = ['combos']
 
@@ -392,12 +394,82 @@ function ComboCard({ combo, onEdit, onDelete, onPatch, onImageUpdated }: {
   )
 }
 
+// ── Linha do combo (visualização em lista) ──────────────────────────────────
+
+function ComboRow({ combo, onEdit, onDelete, onPatch }: {
+  combo: ComboWithItems
+  onEdit: () => void
+  onDelete: () => void
+  onPatch: (patch: Partial<Pick<Combo, 'name' | 'discount_percent' | 'active' | 'show_in_menu'>>) => void
+}) {
+  const total = comboTotal(combo)
+  const final = comboFinal(combo)
+  return (
+    <div className="flex items-center gap-3 p-2.5 rounded-lg border bg-card hover:shadow-sm transition-shadow">
+      <div className="w-11 h-11 rounded-md bg-muted overflow-hidden shrink-0 flex items-center justify-center">
+        {combo.image_url
+          ? <img src={combo.image_url} alt={combo.name} className="w-full h-full object-cover" />
+          : <Package2 className="w-5 h-5 text-muted-foreground/40" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="max-w-56"><InlineName value={combo.name} onSave={(v) => onPatch({ name: v })} /></div>
+          <button type="button" onClick={() => onPatch({ active: !combo.active })} title="Ativar/desativar combo">
+            <Badge variant={combo.active ? 'default' : 'secondary'} className="text-[10px] cursor-pointer">
+              {combo.active ? 'Ativo' : 'Inativo'}
+            </Badge>
+          </button>
+          <ToggleChip
+            on={combo.show_in_menu}
+            labelOn="No cardápio"
+            labelOff="Oculto"
+            colorOn="bg-green-100 text-green-800 hover:bg-green-200"
+            onToggle={() => onPatch({ show_in_menu: !combo.show_in_menu })}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground truncate mt-0.5">
+          {(combo.combo_items ?? []).map((i) => `${i.quantity}x ${i.products?.name}`).join(', ')}
+        </p>
+      </div>
+      {/* Venda / Desconto / Final */}
+      <div className="hidden sm:grid grid-cols-3 gap-1.5 text-center shrink-0 w-64">
+        <div className="rounded-md border bg-muted/30 px-1 py-0.5">
+          <p className="text-[9px] text-muted-foreground leading-none">Venda</p>
+          <span className="text-xs font-medium tabular-nums">{formatCurrency(total)}</span>
+        </div>
+        <div className="rounded-md border bg-amber-50 border-amber-200 px-1 py-0.5">
+          <p className="text-[9px] text-muted-foreground leading-none">Desconto</p>
+          <InlinePercent value={Number(combo.discount_percent)} onSave={(v) => onPatch({ discount_percent: v })} />
+        </div>
+        <div className="rounded-md border bg-green-50 border-green-200 px-1 py-0.5">
+          <p className="text-[9px] text-muted-foreground leading-none">Final</p>
+          <span className="text-xs font-bold text-green-600 tabular-nums">{formatCurrency(final)}</span>
+        </div>
+      </div>
+      <div className="flex gap-1.5 shrink-0">
+        <Button size="sm" variant="outline" title="Editar produtos" onClick={onEdit}>
+          <Pencil className="w-3.5 h-3.5" />
+        </Button>
+        <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" title="Excluir" onClick={onDelete}>
+          <Trash2 className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 // ── Guia Combos ─────────────────────────────────────────────────────────────
 
 export function CombosTab() {
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<ComboWithItems | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('combos-view') as ViewMode) || 'grid')
+
+  const changeView = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem('combos-view', mode)
+  }
 
   const { data: combos = [], isLoading } = useQuery({
     queryKey: COMBO_QK,
@@ -444,10 +516,28 @@ export function CombosTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Combos</h2>
-        <Button size="sm" onClick={() => { setEditing(null); setModalOpen(true) }}>
-          <Plus className="w-4 h-4 mr-1" />
-          Combo
-        </Button>
+        <div className="flex gap-2">
+          <div className="flex rounded-md border overflow-hidden">
+            <button
+              title="Visualização em grade"
+              onClick={() => changeView('grid')}
+              className={cn('px-2.5 flex items-center', viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              title="Visualização em lista"
+              onClick={() => changeView('list')}
+              className={cn('px-2.5 flex items-center border-l', viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
+          <Button size="sm" onClick={() => { setEditing(null); setModalOpen(true) }}>
+            <Plus className="w-4 h-4 mr-1" />
+            Combo
+          </Button>
+        </div>
       </div>
 
       {isLoading && (
@@ -467,7 +557,21 @@ export function CombosTab() {
         </div>
       )}
 
-      {!isLoading && combos.length > 0 && (
+      {!isLoading && combos.length > 0 && viewMode === 'list' && (
+        <div className="space-y-2">
+          {combos.map((c) => (
+            <ComboRow
+              key={c.id}
+              combo={c}
+              onEdit={() => { setEditing(c); setModalOpen(true) }}
+              onDelete={() => handleDelete(c)}
+              onPatch={(patch) => patchMutation.mutate({ id: c.id, patch })}
+            />
+          ))}
+        </div>
+      )}
+
+      {!isLoading && combos.length > 0 && viewMode === 'grid' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {combos.map((c) => (
             <ComboCard
