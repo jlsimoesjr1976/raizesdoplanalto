@@ -1,6 +1,8 @@
 import { lazy, Suspense } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Scale, BookOpenText, ListTree, Target, LineChart, Wallet, Gauge, Loader2 } from 'lucide-react'
+import { Scale, BookOpenText, ListTree, Target, LineChart, Wallet, Gauge, Loader2, Landmark, Lock, GitCompareArrows } from 'lucide-react'
+import { FechamentoTab } from './FechamentoTab'
+import { ConciliacaoTab } from './ConciliacaoTab'
 import { BalanceteTab } from './BalanceteTab'
 import { LancamentosTab } from './LancamentosTab'
 import { PlanoContasTab } from './PlanoContasTab'
@@ -10,6 +12,7 @@ import { CentrosCustoTab } from './CentrosCustoTab'
 const DreTab = lazy(() => import('./DreTab').then((m) => ({ default: m.DreTab })))
 const FluxoCaixaTab = lazy(() => import('./FluxoCaixaTab').then((m) => ({ default: m.FluxoCaixaTab })))
 const IndicadoresTab = lazy(() => import('./IndicadoresTab').then((m) => ({ default: m.IndicadoresTab })))
+const BalancoTab = lazy(() => import('./BalancoTab').then((m) => ({ default: m.BalancoTab })))
 
 function TabLoader() {
   return (
@@ -52,6 +55,18 @@ export function ContabilidadeManagement() {
             <Gauge className="w-4 h-4" />
             Indicadores
           </TabsTrigger>
+          <TabsTrigger value="balanco" className="gap-1.5">
+            <Landmark className="w-4 h-4" />
+            Balanço
+          </TabsTrigger>
+          <TabsTrigger value="conciliacao" className="gap-1.5">
+            <GitCompareArrows className="w-4 h-4" />
+            Conciliação
+          </TabsTrigger>
+          <TabsTrigger value="fechamento" className="gap-1.5">
+            <Lock className="w-4 h-4" />
+            Fechamento
+          </TabsTrigger>
           <TabsTrigger value="plano" className="gap-1.5">
             <ListTree className="w-4 h-4" />
             Plano de Contas
@@ -73,12 +88,17 @@ export function ContabilidadeManagement() {
         <TabsContent value="indicadores" className="mt-4">
           <Suspense fallback={<TabLoader />}><IndicadoresTab /></Suspense>
         </TabsContent>
+        <TabsContent value="balanco" className="mt-4">
+          <Suspense fallback={<TabLoader />}><BalancoTab /></Suspense>
+        </TabsContent>
+        <TabsContent value="conciliacao" className="mt-4"><ConciliacaoTab /></TabsContent>
+        <TabsContent value="fechamento" className="mt-4"><FechamentoTab /></TabsContent>
         <TabsContent value="plano" className="mt-4"><PlanoContasTab /></TabsContent>
         <TabsContent value="centros" className="mt-4"><CentrosCustoTab /></TabsContent>
       </Tabs>
 
       <p className="text-xs text-muted-foreground">
-        Fase 2 do módulo. Balanço Patrimonial, Fechamento Mensal e Conciliação chegam na Fase 3.
+        Módulo gerencial completo (Fases 1–3). Orçamento, metas e exportações avançadas chegam na Fase 4.
       </p>
     </div>
   )
