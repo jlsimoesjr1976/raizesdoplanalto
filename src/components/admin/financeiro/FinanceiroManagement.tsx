@@ -58,6 +58,7 @@ function formatDate(dateStr: string) {
 function FinanceSection({ type }: { type: FinancialEntryType }) {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const [cardFilter, setCardFilter] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editEntry, setEditEntry] = useState<FinancialEntry | null>(null)
   const [baixaEntry, setBaixaEntry] = useState<FinancialEntry | null>(null)
@@ -106,15 +107,25 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
   const dueWeek = sumDue(weekEnd)
   const dueMonth = sumDue(monthEnd)
 
+  // Predicado de cada card — o mesmo usado para somar o valor exibido
+  const cardPredicates: Record<string, (e: FinancialEntry) => boolean> = {
+    day: (e) => e.entry_date === today,
+    week: (e) => e.entry_date >= weekStart && e.entry_date <= today,
+    month: (e) => e.entry_date >= monthStart && e.entry_date <= today,
+    dueWeek: (e) => !e.paid && e.entry_date >= today && e.entry_date <= weekEnd,
+    dueMonth: (e) => !e.paid && e.entry_date >= today && e.entry_date <= monthEnd,
+  }
+
   const cards = [
-    { title: 'Total do Dia', value: totalDay, icon: CalendarClock, hint: formatDate(today) },
-    { title: 'Acumulado da Semana', value: totalWeek, icon: CalendarRange, hint: `desde ${formatDate(weekStart)} (dom)` },
-    { title: 'Acumulado do Mês', value: totalMonth, icon: CalendarDays, hint: `desde ${formatDate(monthStart)}` },
-    { title: 'A vencer na semana', value: dueWeek, icon: CalendarRange, hint: `em aberto até ${formatDate(weekEnd)}`, due: true },
-    { title: 'A vencer no mês atual', value: dueMonth, icon: CalendarDays, hint: `em aberto até ${formatDate(monthEnd)}`, due: true },
+    { key: 'day', title: 'Total do Dia', value: totalDay, icon: CalendarClock, hint: formatDate(today) },
+    { key: 'week', title: 'Acumulado da Semana', value: totalWeek, icon: CalendarRange, hint: `desde ${formatDate(weekStart)} (dom)` },
+    { key: 'month', title: 'Acumulado do Mês', value: totalMonth, icon: CalendarDays, hint: `desde ${formatDate(monthStart)}` },
+    { key: 'dueWeek', title: 'A vencer na semana', value: dueWeek, icon: CalendarRange, hint: `em aberto até ${formatDate(weekEnd)}`, due: true },
+    { key: 'dueMonth', title: 'A vencer no mês atual', value: dueMonth, icon: CalendarDays, hint: `em aberto até ${formatDate(monthEnd)}`, due: true },
   ]
 
   const filtered = entries.filter((e) => {
+    if (cardFilter && !cardPredicates[cardFilter](e)) return false
     const q = search.toLowerCase()
     return (
       e.description.toLowerCase().includes(q) ||
@@ -138,7 +149,19 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
       {/* Cards de totais */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {cards.map((c) => (
-          <Card key={c.title} className={cn('border shadow-sm', c.due && 'bg-amber-50/60 border-amber-200')}>
+          <Card
+            key={c.title}
+            role="button"
+            tabIndex={0}
+            title={cardFilter === c.key ? 'Clique para limpar o filtro' : 'Clique para filtrar a lista abaixo'}
+            onClick={() => setCardFilter((cur) => (cur === c.key ? null : c.key))}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter((cur) => (cur === c.key ? null : c.key)) } }}
+            className={cn(
+              'border shadow-sm cursor-pointer transition-shadow hover:shadow-md select-none',
+              c.due && 'bg-amber-50/60 border-amber-200',
+              cardFilter === c.key && 'ring-2 ring-primary border-primary'
+            )}
+          >
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-sm text-muted-foreground">{c.title}</p>
@@ -150,6 +173,19 @@ function FinanceSection({ type }: { type: FinancialEntryType }) {
           </Card>
         ))}
       </div>
+
+      {/* Indicador de filtro ativo */}
+      {cardFilter && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">
+            Mostrando {filtered.length} lançamento{filtered.length !== 1 ? 's' : ''} de{' '}
+            <span className="font-medium text-foreground">{cards.find((c) => c.key === cardFilter)?.title}</span>
+          </span>
+          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setCardFilter(null)}>
+            Limpar filtro
+          </Button>
+        </div>
+      )}
 
       {/* Busca + Novo */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
