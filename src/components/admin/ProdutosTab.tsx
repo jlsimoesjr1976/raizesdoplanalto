@@ -89,7 +89,7 @@ function InfiniteStockButton({ active, onToggle }: { active: boolean; onToggle: 
   return (
     <button
       type="button"
-      title={active ? 'Estoque infinito ativo (clique para voltar a controlar estoque)' : 'Marcar como estoque infinito (não baixa nem bloqueia por falta de estoque)'}
+      title={active ? 'Sem controle de estoque ativo (clique para voltar a controlar estoque)' : 'Marcar como sem controle de estoque (não baixa nem bloqueia por falta de estoque)'}
       onClick={(e) => { e.stopPropagation(); onToggle() }}
       className={cn(
         'inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full transition-colors',
@@ -97,7 +97,7 @@ function InfiniteStockButton({ active, onToggle }: { active: boolean; onToggle: 
       )}
     >
       <Infinity className="w-3 h-3" />
-      {active ? 'Estoque infinito' : 'Estoque normal'}
+      {active ? 'Sem controle' : 'Estoque normal'}
     </button>
   )
 }
@@ -282,8 +282,8 @@ function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onD
           }`}>
             <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Estoque</p>
             {p.infinite_stock ? (
-              <span className="inline-flex items-center gap-1 text-sm font-medium text-blue-700" title="Estoque infinito">
-                <Infinity className="w-3.5 h-3.5" /> Infinito
+              <span className="inline-flex items-center gap-1 text-sm font-medium text-blue-700" title="Sem controle de estoque">
+                <Infinity className="w-3.5 h-3.5" /> Sem controle
               </span>
             ) : (
               <InlineNumber
@@ -368,7 +368,7 @@ function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDe
             render={(v) => <span className="text-xs font-bold text-green-600 tabular-nums">{formatCurrency(v)}</span>}
           />
           {p.infinite_stock ? (
-            <span className="inline-flex items-center gap-1 text-xs text-blue-700"><Infinity className="w-3 h-3" /> Infinito</span>
+            <span className="inline-flex items-center gap-1 text-xs text-blue-700"><Infinity className="w-3 h-3" /> Sem controle</span>
           ) : (
             <InlineNumber
               value={p.stock_quantity}
@@ -409,7 +409,7 @@ function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDe
           p.infinite_stock ? 'bg-blue-50 border-blue-200' : p.stock_quantity <= 0 ? 'bg-red-50 border-red-200' : p.stock_quantity <= 5 ? 'bg-amber-50 border-amber-200' : 'bg-muted/30')}>
           <p className="text-[9px] text-muted-foreground leading-none">Estoque</p>
           {p.infinite_stock ? (
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700"><Infinity className="w-3 h-3" /> Infinito</span>
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700"><Infinity className="w-3 h-3" /> Sem controle</span>
           ) : (
             <InlineNumber
               value={p.stock_quantity}
