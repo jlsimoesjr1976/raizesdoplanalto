@@ -15,8 +15,9 @@ import { Paperclip, X, Loader2, FileText, Image as ImageIcon, FileSpreadsheet, F
 import { formatCurrency } from '@/lib/utils'
 import { supabase } from '@/integrations/supabase/client'
 import { openPrivateAttachment } from '@/lib/attachments'
+import { SETTLEMENT_METHODS } from './BaixaModal'
 import type {
-  BeneficiaryType, FinancialAttachment, FinancialEntry, FinancialEntryType,
+  BeneficiaryType, FinancialAttachment, FinancialEntry, FinancialEntryType, SettlementMethod,
 } from '@/types/database'
 
 const BENEFICIARY_GROUPS: { type: BeneficiaryType; table: string; label: string }[] = [
@@ -89,6 +90,7 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState('')
   const [recurrent, setRecurrent] = useState(false)
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('mensal')
   const [recurrenceCount, setRecurrenceCount] = useState('12')
@@ -128,6 +130,7 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
             ? `${entry.beneficiary_type}:${entry.beneficiary_id}`
             : ''
         )
+        setPaymentMethod(entry.payment_method ?? '')
       } else {
         setDescription('')
         setAmount('')
@@ -135,6 +138,7 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
         setNotes('')
         setAttachments([])
         setBeneficiary('')
+        setPaymentMethod('')
       }
       setRecurrent(false)
       setRecurrenceType('mensal')
@@ -204,6 +208,7 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
       beneficiary_type: (benType as BeneficiaryType) ?? null,
       beneficiary_id: benId,
       beneficiary_name: benOption?.name ?? null,
+      payment_method: (paymentMethod || null) as SettlementMethod | null,
     }
 
     let err
@@ -362,6 +367,21 @@ export function LancamentoFormModal({ open, type, entry, onClose, onSaved }: Pro
               )}
             </div>
           )}
+
+          {/* Forma de pagamento */}
+          <div className="space-y-1.5">
+            <Label>Forma de pagamento</Label>
+            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecionar forma..." />
+              </SelectTrigger>
+              <SelectContent>
+                {SETTLEMENT_METHODS.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {/* Observações */}
           <div className="space-y-1.5">

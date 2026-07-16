@@ -52,7 +52,7 @@ export function BaixaModal({ open, entry, onClose, onSettled }: Props) {
 
   useEffect(() => {
     if (open) {
-      setMethod('')
+      setMethod(entry?.payment_method ?? '')
       setHasFine(false); setFine('')
       setHasInterest(false); setInterest('')
       setReceipt(null)
