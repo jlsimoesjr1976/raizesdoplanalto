@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/integrations/supabase/client'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import { MONTHS_PT, sortAccounts } from './accUtils'
+import { ExportMenu } from './ExportMenu'
+import type { ReportData } from './reportExport'
 import type { AccAccount } from '@/types/database'
 
 interface TBRow { account_id: string; prev_debits: number; prev_credits: number; debits: number; credits: number }
@@ -167,6 +169,7 @@ export function BalancoTab() {
             <SelectItem value="caixa">Regime de caixa</SelectItem>
           </SelectContent>
         </Select>
+        <ExportMenu getData={() => balancoReportData(calc, asOf)} />
       </div>
 
       {calc.diff !== 0 ? (
@@ -202,8 +205,8 @@ export function BalancoTab() {
                 </thead>
                 <tbody className="divide-y">
                   {calc.sections.filter((s) => s.side === side).map((s) => (
-                    <>
-                      <tr key={s.title} className="bg-muted/30 font-semibold">
+                    <Fragment key={s.title}>
+                      <tr className="bg-muted/30 font-semibold">
                         <td className="px-3 py-1.5">{s.title}</td>
                         <td className="text-right px-3 py-1.5 tabular-nums">{formatCurrency(s.total)}</td>
                         <td className="text-right px-3 py-1.5 tabular-nums text-muted-foreground">{formatCurrency(s.prevTotal)}</td>
@@ -223,7 +226,7 @@ export function BalancoTab() {
                           <td className="text-right px-3 py-1 tabular-nums text-xs text-muted-foreground">{fmtPct(r.v, calc.totalAtivo)}</td>
                         </tr>
                       ))}
-                    </>
+                    </Fragment>
                   ))}
                   <tr className="bg-primary/10 font-bold">
                     <td className="px-3 py-2">TOTAL {side === 'ativo' ? 'DO ATIVO' : 'PASSIVO + PL'}</td>
@@ -240,4 +243,31 @@ export function BalancoTab() {
       )}
     </div>
   )
+}
+
+// ── Exportação ───────────────────────────────────────────────────────────────
+
+interface CalcSection extends Section { rows: { code: string; name: string; v: number; p: number }[]; total: number; prevTotal: number }
+interface CalcResult { sections: CalcSection[]; totalAtivo: number; totalPassivo: number; diff: number }
+
+function balancoReportData(calc: CalcResult, asOf: string): ReportData {
+  const rows: Record<string, string>[] = []
+  for (const s of calc.sections) {
+    rows.push({ code: '', name: s.title, atual: formatCurrency(s.total), anterior: formatCurrency(s.prevTotal) })
+    for (const r of s.rows.filter((x) => x.v !== 0 || x.p !== 0)) {
+      rows.push({ code: r.code, name: `  ${r.name}`, atual: formatCurrency(r.v), anterior: formatCurrency(r.p) })
+    }
+  }
+  return {
+    title: 'Balanço Patrimonial',
+    subtitle: `Posição em ${asOf.split('-').reverse().join('/')}`,
+    columns: [
+      { key: 'code', header: 'Código' },
+      { key: 'name', header: 'Conta' },
+      { key: 'atual', header: 'Valor atual', align: 'right' },
+      { key: 'anterior', header: 'Período anterior', align: 'right' },
+    ],
+    rows,
+    totals: { name: 'TOTAL DO ATIVO', atual: formatCurrency(calc.totalAtivo), anterior: formatCurrency(calc.totalPassivo) },
+  }
 }

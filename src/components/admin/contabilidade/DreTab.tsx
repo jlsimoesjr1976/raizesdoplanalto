@@ -4,6 +4,8 @@ import { supabase } from '@/integrations/supabase/client'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn, formatCurrency } from '@/lib/utils'
 import { MONTHS_PT } from './accUtils'
+import { ExportMenu } from './ExportMenu'
+import type { ReportData } from './reportExport'
 
 type Buckets = Record<string, number>
 type Mode = 'mensal' | 'trimestral' | 'anual'
@@ -121,6 +123,7 @@ export function DreTab() {
             <SelectItem value="caixa">Regime de caixa</SelectItem>
           </SelectContent>
         </Select>
+        <ExportMenu getData={() => dreReportData(curB, prevB, receitaLiquida, periodLabel, prevLabel)} />
       </div>
 
       {l1 && <div className="h-64 rounded-lg bg-muted animate-pulse" />}
@@ -176,4 +179,36 @@ export function DreTab() {
       </p>
     </div>
   )
+}
+
+// ── Exportação ───────────────────────────────────────────────────────────────
+
+function dreReportData(curB: Buckets, prevB: Buckets, receitaLiquida: number, periodLabel: string, prevLabel: string): ReportData {
+  return {
+    title: 'DRE Gerencial',
+    subtitle: `${periodLabel} — comparativo com ${prevLabel}`,
+    columns: [
+      { key: 'label', header: 'Linha' },
+      { key: 'atual', header: periodLabel, align: 'right' },
+      { key: 'pctRL', header: '% RL', align: 'right' },
+      { key: 'anterior', header: prevLabel, align: 'right' },
+      { key: 'delta', header: 'Δ R$', align: 'right' },
+      { key: 'deltaPct', header: 'Δ %', align: 'right' },
+    ],
+    rows: LINES.map((line) => {
+      const v = line.value(curB)
+      const p = line.value(prevB)
+      const delta = v - p
+      const deltaPct = p !== 0 ? (delta / Math.abs(p)) * 100 : null
+      const pctRL = receitaLiquida !== 0 ? (v / receitaLiquida) * 100 : null
+      return {
+        label: line.label,
+        atual: formatCurrency(v),
+        pctRL: pctRL !== null ? `${pctRL.toFixed(1)}%` : '—',
+        anterior: formatCurrency(p),
+        delta: delta !== 0 ? formatCurrency(delta) : '—',
+        deltaPct: deltaPct !== null ? `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%` : '—',
+      }
+    }),
+  }
 }

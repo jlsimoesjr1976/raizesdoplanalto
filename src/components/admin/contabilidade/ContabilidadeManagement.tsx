@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Scale, BookOpenText, ListTree, Target, LineChart, Wallet, Gauge, Loader2, Landmark, Lock, GitCompareArrows } from 'lucide-react'
+import { Scale, BookOpenText, ListTree, Target, LineChart, Wallet, Gauge, Loader2, Landmark, Lock, GitCompareArrows, PiggyBank, History } from 'lucide-react'
 import { FechamentoTab } from './FechamentoTab'
 import { ConciliacaoTab } from './ConciliacaoTab'
 import { BalanceteTab } from './BalanceteTab'
@@ -13,6 +13,8 @@ const DreTab = lazy(() => import('./DreTab').then((m) => ({ default: m.DreTab })
 const FluxoCaixaTab = lazy(() => import('./FluxoCaixaTab').then((m) => ({ default: m.FluxoCaixaTab })))
 const IndicadoresTab = lazy(() => import('./IndicadoresTab').then((m) => ({ default: m.IndicadoresTab })))
 const BalancoTab = lazy(() => import('./BalancoTab').then((m) => ({ default: m.BalancoTab })))
+const OrcamentoTab = lazy(() => import('./OrcamentoTab').then((m) => ({ default: m.OrcamentoTab })))
+const AuditoriaTab = lazy(() => import('./AuditoriaTab').then((m) => ({ default: m.AuditoriaTab })))
 
 function TabLoader() {
   return (
@@ -55,6 +57,10 @@ export function ContabilidadeManagement() {
             <Gauge className="w-4 h-4" />
             Indicadores
           </TabsTrigger>
+          <TabsTrigger value="orcamento" className="gap-1.5">
+            <PiggyBank className="w-4 h-4" />
+            Orçamento
+          </TabsTrigger>
           <TabsTrigger value="balanco" className="gap-1.5">
             <Landmark className="w-4 h-4" />
             Balanço
@@ -75,6 +81,10 @@ export function ContabilidadeManagement() {
             <Target className="w-4 h-4" />
             Centros de Custo
           </TabsTrigger>
+          <TabsTrigger value="auditoria" className="gap-1.5">
+            <History className="w-4 h-4" />
+            Auditoria
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="lancamentos" className="mt-4"><LancamentosTab /></TabsContent>
@@ -88,6 +98,9 @@ export function ContabilidadeManagement() {
         <TabsContent value="indicadores" className="mt-4">
           <Suspense fallback={<TabLoader />}><IndicadoresTab /></Suspense>
         </TabsContent>
+        <TabsContent value="orcamento" className="mt-4">
+          <Suspense fallback={<TabLoader />}><OrcamentoTab /></Suspense>
+        </TabsContent>
         <TabsContent value="balanco" className="mt-4">
           <Suspense fallback={<TabLoader />}><BalancoTab /></Suspense>
         </TabsContent>
@@ -95,10 +108,15 @@ export function ContabilidadeManagement() {
         <TabsContent value="fechamento" className="mt-4"><FechamentoTab /></TabsContent>
         <TabsContent value="plano" className="mt-4"><PlanoContasTab /></TabsContent>
         <TabsContent value="centros" className="mt-4"><CentrosCustoTab /></TabsContent>
+        <TabsContent value="auditoria" className="mt-4">
+          <Suspense fallback={<TabLoader />}><AuditoriaTab /></Suspense>
+        </TabsContent>
       </Tabs>
 
       <p className="text-xs text-muted-foreground">
-        Módulo gerencial completo (Fases 1–3). Orçamento, metas e exportações avançadas chegam na Fase 4.
+        Módulo gerencial completo (Fases 1–4): partidas dobradas, integrações automáticas de vendas
+        e financeiro, DRE, fluxo de caixa, indicadores, balanço, fechamento mensal, conciliação,
+        orçamento/metas, exportações (PDF/Excel/CSV/impressão) e trilha de auditoria.
       </p>
     </div>
   )

@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, SearchCheck, Scale, Loader2 } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import { KIND_LABELS, MONTHS_PT, monthRange, signedBalance, balanceNature, sortAccounts } from './accUtils'
+import { ExportMenu } from './ExportMenu'
+import type { ReportData } from './reportExport'
 import type { AccAccount, AccEntry, AccKind } from '@/types/database'
 
 interface TBRow { account_id: string; prev_debits: number; prev_credits: number; debits: number; credits: number }
@@ -149,6 +151,7 @@ export function BalanceteTab() {
           <SearchCheck className="w-4 h-4 mr-1" />
           Ver inconsistências
         </Button>
+        <ExportMenu getData={() => balanceteReportData(visible, month, year, regime)} />
         <span className="text-xs text-muted-foreground ml-auto">
           Atualizado {new Date(dataUpdatedAt || Date.now()).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
         </span>
@@ -391,4 +394,31 @@ function InconsistenciasModal({ open, from, to, accounts, onClose }: {
       </DialogContent>
     </Dialog>
   )
+}
+
+// ── Exportação ───────────────────────────────────────────────────────────────
+
+function balanceteReportData(rows: AccRow[], month: number, year: number, regime: 'competencia' | 'caixa'): ReportData {
+  return {
+    title: 'Balancete Mensal',
+    subtitle: `${MONTHS_PT[month - 1]}/${year} — Regime de ${regime === 'caixa' ? 'caixa' : 'competência'}`,
+    columns: [
+      { key: 'code', header: 'Código' },
+      { key: 'name', header: 'Conta' },
+      { key: 'prev', header: 'Saldo anterior', align: 'right' },
+      { key: 'debits', header: 'Débitos', align: 'right' },
+      { key: 'credits', header: 'Créditos', align: 'right' },
+      { key: 'balance', header: 'Saldo atual', align: 'right' },
+      { key: 'nature', header: 'Nat.', align: 'right' },
+    ],
+    rows: rows.map((r) => ({
+      code: r.code,
+      name: r.name,
+      prev: formatCurrency(r.prevBalance),
+      debits: r.debits ? formatCurrency(r.debits) : '—',
+      credits: r.credits ? formatCurrency(r.credits) : '—',
+      balance: formatCurrency(r.balance),
+      nature: balanceNature(r.nature, r.balance),
+    })),
+  }
 }
