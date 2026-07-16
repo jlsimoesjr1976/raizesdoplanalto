@@ -22,7 +22,7 @@ import {
   FolderPlus,
   ChevronDown,
   ReceiptText,
-} from 'lucide-react'
+, Calculator } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import logoImg from '@/assets/logo.png'
 import InsumosManagement from '@/components/admin/InsumosManagement'
@@ -32,6 +32,7 @@ import { ConfiguracoesManagement } from '@/components/admin/ConfiguracoesManagem
 import { ClientesManagement } from '@/components/admin/clientes/ClientesManagement'
 import { FreelancersManagement } from '@/components/admin/freelancers/FreelancersManagement'
 import { FinanceiroManagement } from '@/components/admin/financeiro/FinanceiroManagement'
+import { ContabilidadeManagement } from '@/components/admin/contabilidade/ContabilidadeManagement'
 import { FornecedoresManagement } from '@/components/admin/fornecedores/FornecedoresManagement'
 import { FuncionariosManagement } from '@/components/admin/funcionarios/FuncionariosManagement'
 import { MarketingManagement } from '@/components/admin/marketing/MarketingManagement'
@@ -54,6 +55,7 @@ type Tab =
   | 'suppliers'
   | 'employees'
   | 'finance'
+  | 'accounting'
   | 'invoices'
   | 'marketing'
   | 'settings'
@@ -91,6 +93,7 @@ const NAV_CADASTROS: NavItem[] = [
 // Itens após o grupo Cadastros
 const NAV_BOTTOM: NavItem[] = [
   { id: 'finance', label: 'Financeiro', icon: Wallet },
+  { id: 'accounting', label: 'Contabilidade', icon: Calculator },
   { id: 'invoices', label: 'Notas Fiscais', icon: ReceiptText },
   { id: 'marketing', label: 'Marketing', icon: Megaphone },
   { id: 'users', label: 'Usuários', icon: ShieldCheck },
@@ -231,6 +234,7 @@ export default function AdminDashboard() {
     if (activeTab === 'suppliers') return <FornecedoresManagement />
     if (activeTab === 'employees') return <FuncionariosManagement />
     if (activeTab === 'finance') return <FinanceiroManagement />
+    if (activeTab === 'accounting') return <ContabilidadeManagement />
     if (activeTab === 'invoices') return <NotasFiscaisManagement />
     if (activeTab === 'marketing') return <MarketingManagement />
     if (activeTab === 'settings') return <ConfiguracoesManagement />

@@ -291,3 +291,60 @@ export interface MarketingCampaign {
   created_by: string | null
   created_at: string
 }
+
+// ── Contabilidade ────────────────────────────────────────────────────────────
+
+export type AccKind = 'ativo' | 'passivo' | 'pl' | 'receita' | 'custo' | 'despesa' | 'compensatoria'
+export type AccNature = 'D' | 'C'
+export type AccEntryStatus = 'rascunho' | 'pendente' | 'aprovado' | 'contabilizado' | 'estornado'
+
+export interface AccAccount {
+  id: string
+  code: string
+  name: string
+  kind: AccKind
+  nature: AccNature
+  parent_id: string | null
+  level: number
+  allows_entries: boolean
+  active: boolean
+  default_cost_center_id: string | null
+  notes: string | null
+  created_at: string
+}
+
+export interface AccCostCenter {
+  id: string
+  name: string
+  active: boolean
+  created_at: string
+}
+
+export interface AccEntryLine {
+  id: string
+  entry_id: string
+  account_id: string
+  side: AccNature
+  amount: number
+  cost_center_id: string | null
+  acc_accounts?: AccAccount
+}
+
+export interface AccEntry {
+  id: string
+  competence_date: string
+  cash_date: string | null
+  history: string
+  document: string | null
+  origin: string
+  origin_table: string | null
+  origin_id: string | null
+  status: AccEntryStatus
+  reversal_of: string | null
+  cost_center_id: string | null
+  attachments: FinancialAttachment[]
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  acc_entry_lines?: AccEntryLine[]
+}
