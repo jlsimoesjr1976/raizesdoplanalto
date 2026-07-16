@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Minus, Undo2, ChevronDown, ChevronRight, BookOpenText, Loader2 } from 'lucide-react'
+import { Plus, Minus, Undo2, ChevronDown, ChevronRight, BookOpenText, Loader2, Check, Pencil, Trash2 } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import { MONTHS_PT, monthRange, sortAccounts } from './accUtils'
 import type { AccAccount, AccCostCenter, AccEntry, AccEntryStatus, AccNature } from '@/types/database'
@@ -35,6 +35,7 @@ export function LancamentosTab() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [modalOpen, setModalOpen] = useState(false)
+  const [adjusting, setAdjusting] = useState<AccEntry | null>(null)
 
   const { from, to } = monthRange(year, month)
 
@@ -75,6 +76,19 @@ export function LancamentosTab() {
     if (!reason.trim()) { alert('A justificativa é obrigatória.'); return }
     const { error } = await supabase.rpc('acc_reverse_entry', { p_entry_id: e.id, p_reason: reason.trim() })
     if (error) { alert(`Erro ao estornar: ${error.message}`); return }
+    invalidate()
+  }
+
+  async function handleApprove(e: AccEntry) {
+    const { error } = await supabase.from('acc_entries').update({ status: 'contabilizado', updated_at: new Date().toISOString() }).eq('id', e.id)
+    if (error) { alert(`Erro: ${error.message}`); return }
+    invalidate()
+  }
+
+  async function handleDiscard(e: AccEntry) {
+    if (!confirm(`Descartar a sugestão "${e.history}"?\n\nEla não entrará na contabilidade. (A baixa no Financeiro não é alterada.)`)) return
+    const { error } = await supabase.from('acc_entries').delete().eq('id', e.id)
+    if (error) { alert(`Erro: ${error.message}`); return }
     invalidate()
   }
 
@@ -124,6 +138,13 @@ export function LancamentosTab() {
         </Select>
       </div>
 
+      {(() => { const pend = entries.filter((e) => e.status === 'pendente').length; return pend > 0 ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 flex items-center gap-2">
+          <BookOpenText className="w-4 h-4 shrink-0" />
+          <span><span className="font-bold">{pend} lançamento{pend !== 1 ? 's' : ''}</span> gerado{pend !== 1 ? 's' : ''} do Financeiro aguardando validação — contabilize, ajuste a classificação ou descarte.</span>
+        </div>
+      ) : null })()}
+
       {isLoading && <div className="h-48 rounded-lg bg-muted animate-pulse" />}
 
       {!isLoading && filtered.length === 0 && (
@@ -146,6 +167,19 @@ export function LancamentosTab() {
                 {STATUS_UI[e.status].label}
               </span>
               <span className="font-semibold tabular-nums shrink-0">{formatCurrency(entryTotal(e))}</span>
+              {e.status === 'pendente' && (
+                <span className="flex gap-1 shrink-0" onClick={(ev) => ev.stopPropagation()}>
+                  <Button size="sm" className="h-7 px-2 text-xs" title="Validar e contabilizar como está" onClick={() => handleApprove(e)}>
+                    <Check className="w-3.5 h-3.5 mr-1" />Contabilizar
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs" title="Ajustar contas antes de contabilizar" onClick={() => setAdjusting(e)}>
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" title="Descartar sugestão" onClick={() => handleDiscard(e)}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </span>
+              )}
               {e.status === 'contabilizado' && e.origin !== 'estorno' && (
                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive shrink-0" title="Estornar" onClick={(ev) => { ev.stopPropagation(); handleReverse(e) }}>
                   <Undo2 className="w-3.5 h-3.5" />
@@ -179,7 +213,119 @@ export function LancamentosTab() {
         onClose={() => setModalOpen(false)}
         onSaved={invalidate}
       />
+
+      <AjustarLancamentoModal
+        entry={adjusting}
+        costCenters={costCenters}
+        onClose={() => setAdjusting(null)}
+        onSaved={invalidate}
+      />
     </div>
+  )
+}
+
+// ── Ajustar sugestão vinda do Financeiro (troca de contas) ──────────────────
+
+function AjustarLancamentoModal({ entry, costCenters, onClose, onSaved }: {
+  entry: AccEntry | null
+  costCenters: AccCostCenter[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [history, setHistory] = useState('')
+  const [costCenter, setCostCenter] = useState('')
+  const [lineAccounts, setLineAccounts] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['acc-accounts-analytic'],
+    enabled: !!entry,
+    queryFn: async () => {
+      const { data } = await supabase.from('acc_accounts').select('*').eq('allows_entries', true).eq('active', true)
+      return sortAccounts((data ?? []) as AccAccount[])
+    },
+  })
+
+  useEffect(() => {
+    if (entry) {
+      setHistory(entry.history)
+      setCostCenter(entry.cost_center_id ?? '')
+      setLineAccounts(Object.fromEntries((entry.acc_entry_lines ?? []).map((l) => [l.id, l.account_id])))
+    }
+  }, [entry])
+
+  async function handleSave() {
+    if (!entry) return
+    setSaving(true)
+    for (const l of entry.acc_entry_lines ?? []) {
+      const acc = lineAccounts[l.id]
+      if (acc && acc !== l.account_id) {
+        const { error } = await supabase.from('acc_entry_lines').update({ account_id: acc }).eq('id', l.id)
+        if (error) { alert(`Erro: ${error.message}`); setSaving(false); return }
+      }
+    }
+    const { error } = await supabase.from('acc_entries').update({
+      history: history.trim() || entry.history,
+      cost_center_id: costCenter || null,
+      status: 'contabilizado',
+      updated_at: new Date().toISOString(),
+    }).eq('id', entry.id)
+    setSaving(false)
+    if (error) { alert(`Erro: ${error.message}`); return }
+    onSaved()
+    onClose()
+  }
+
+  return (
+    <Dialog open={!!entry} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Ajustar e contabilizar</DialogTitle>
+        </DialogHeader>
+        {entry && (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Histórico</Label>
+              <Input value={history} onChange={(e) => setHistory(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Centro de custo</Label>
+              <Select value={costCenter || '__none__'} onValueChange={(v) => setCostCenter(v === '__none__' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Nenhum</SelectItem>
+                  {costCenters.filter((c) => c.active).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Partidas (ajuste a conta se necessário)</Label>
+              {(entry.acc_entry_lines ?? []).sort((a, b) => a.side.localeCompare(b.side)).map((l) => (
+                <div key={l.id} className="flex items-center gap-2">
+                  <Badge variant={l.side === 'D' ? 'default' : 'secondary'} className="text-[10px] w-14 justify-center shrink-0">
+                    {l.side === 'D' ? 'Débito' : 'Crédito'}
+                  </Badge>
+                  <Select value={lineAccounts[l.id] ?? l.account_id} onValueChange={(v) => setLineAccounts((prev) => ({ ...prev, [l.id]: v }))}>
+                    <SelectTrigger className="flex-1 min-w-0"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <span className="font-medium tabular-nums shrink-0 w-24 text-right">{formatCurrency(Number(l.amount))}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              O valor vem da baixa no Financeiro e não é alterado aqui. Ao salvar, o lançamento é contabilizado.
+            </p>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Salvar e contabilizar'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
