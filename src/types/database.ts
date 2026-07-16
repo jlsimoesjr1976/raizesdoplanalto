@@ -60,6 +60,7 @@ export interface Product {
   price: number
   cost_price: number
   stock_quantity: number
+  infinite_stock: boolean
   ncm: string | null
   cest: string | null
   cfop: string | null

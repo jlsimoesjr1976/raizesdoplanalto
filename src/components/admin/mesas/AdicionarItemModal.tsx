@@ -44,7 +44,7 @@ export function AdicionarItemModal({ open, onClose, onConfirm }: Props) {
   async function loadData() {
     const [{ data: cats }, { data: prods }, { data: cbs }] = await Promise.all([
       supabase.from('categories').select('*').eq('active', true).order('sort_order'),
-      supabase.from('products').select('*').eq('active', true).gte('stock_quantity', 1).order('name'),
+      supabase.from('products').select('*').eq('active', true).or('infinite_stock.eq.true,stock_quantity.gte.1').order('name'),
       supabase.from('combos').select('*, combo_items(*, products(*))').eq('active', true).order('name'),
     ])
     setCategories(cats ?? [])

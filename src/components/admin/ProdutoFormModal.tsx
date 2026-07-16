@@ -81,6 +81,7 @@ interface FormState {
   price: string
   cost_price: string
   stock_quantity: string
+  infinite_stock: boolean
   ncm: string
   cest: string
   cfop: string
@@ -99,6 +100,7 @@ const defaultForm: FormState = {
   price: '',
   cost_price: '',
   stock_quantity: '0',
+  infinite_stock: false,
   ncm: '',
   cest: '',
   cfop: '',
@@ -194,6 +196,7 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
           price: String(product.price),
           cost_price: product.cost_price > 0 ? String(product.cost_price) : '',
           stock_quantity: String(product.stock_quantity ?? 0),
+          infinite_stock: product.infinite_stock ?? false,
           ncm: product.ncm ?? '',
           cest: product.cest ?? '',
           cfop: product.cfop ?? '',
@@ -311,6 +314,7 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
         price: Number(form.price),
         cost_price: costPrice,
         stock_quantity: Number(form.stock_quantity) || 0,
+        infinite_stock: form.infinite_stock,
         ncm: form.ncm || null,
         cest: form.cest || null,
         cfop: form.cfop || null,
@@ -607,11 +611,32 @@ export function ProdutoFormModal({ open, product, fichaCusto, onClose, onSave }:
           <Separator />
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estoque</p>
 
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="prod-infinite" className="cursor-pointer">Não considerar estoque</Label>
+              <p className="text-xs text-muted-foreground">
+                O item fica disponível como se tivesse estoque infinito: sem baixa e sem bloqueio
+                por falta de estoque em comandas, cardápio online e combos.
+              </p>
+            </div>
+            <Switch id="prod-infinite" checked={form.infinite_stock} onCheckedChange={(v) => setForm((f) => ({ ...f, infinite_stock: v }))} />
+          </div>
+
           <div className="space-y-1">
             <Label htmlFor="prod-stock">Quantidade em Estoque</Label>
-            <Input id="prod-stock" type="number" min={0} step="0.001" value={form.stock_quantity} onChange={(e) => set('stock_quantity')(e.target.value)} />
+            <Input
+              id="prod-stock"
+              type="number"
+              min={0}
+              step="0.001"
+              value={form.stock_quantity}
+              onChange={(e) => set('stock_quantity')(e.target.value)}
+              disabled={form.infinite_stock}
+            />
             <p className="text-xs text-muted-foreground">
-              A quantidade é baixada automaticamente ao lançar o item em uma comanda.
+              {form.infinite_stock
+                ? 'Ignorado enquanto "Não considerar estoque" estiver ativo.'
+                : 'A quantidade é baixada automaticamente ao lançar o item em uma comanda.'}
             </p>
           </div>
 

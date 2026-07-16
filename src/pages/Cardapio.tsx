@@ -48,8 +48,8 @@ function CardapioInner() {
     queryFn: async () => {
       // Colunas explícitas: o papel anônimo não tem acesso a custo/dados fiscais
       const { data } = await supabase.from('products')
-        .select('id, category_id, name, description, price, image_url, stock_quantity, active, show_in_menu, sort_order, created_at')
-        .eq('active', true).eq('show_in_menu', true).gte('stock_quantity', 1).order('name')
+        .select('id, category_id, name, description, price, image_url, stock_quantity, infinite_stock, active, show_in_menu, sort_order, created_at')
+        .eq('active', true).eq('show_in_menu', true).or('infinite_stock.eq.true,stock_quantity.gte.1').order('name')
       return (data ?? []) as Product[]
     },
   })
@@ -57,7 +57,7 @@ function CardapioInner() {
     queryKey: ['pub-combos'],
     queryFn: async () => {
       const { data } = await supabase.from('combos')
-        .select('*, combo_items(*, products(id, name, price, image_url, stock_quantity, active, show_in_menu))')
+        .select('*, combo_items(*, products(id, name, price, image_url, stock_quantity, infinite_stock, active, show_in_menu))')
         .eq('active', true).eq('show_in_menu', true).order('name')
       return ((data ?? []) as ComboWithItems[]).filter(comboAvailable)
     },

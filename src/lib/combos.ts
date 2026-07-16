@@ -21,20 +21,26 @@ export function comboFinal(combo: ComboWithItems): number {
   }, 0)
 }
 
-/** Quantos combos completos o estoque atual permite montar. */
+/** Quantos combos completos o estoque atual permite montar (produtos de estoque infinito não limitam). */
 export function comboMaxQty(combo: ComboWithItems): number {
   const items = combo.combo_items ?? []
   if (items.length === 0) return 0
-  return Math.max(0, Math.min(...items.map((i) =>
-    i.products && i.products.active ? Math.floor(Number(i.products.stock_quantity) / i.quantity) : 0
-  )))
+  const limits = items.map((i) => {
+    if (!i.products || !i.products.active) return 0
+    if (i.products.infinite_stock) return Infinity
+    return Math.floor(Number(i.products.stock_quantity) / i.quantity)
+  })
+  const finite = Math.max(0, Math.min(...limits))
+  return Number.isFinite(finite) ? finite : 999
 }
 
-/** Combo disponível para venda: todos os produtos ativos e com estoque suficiente para 1 combo. */
+/** Combo disponível para venda: todos os produtos ativos e com estoque suficiente para 1 combo (ou infinito). */
 export function comboAvailable(combo: ComboWithItems): boolean {
   const items = combo.combo_items ?? []
   if (items.length === 0) return false
-  return items.every((i) => i.products && i.products.active && Number(i.products.stock_quantity) >= i.quantity)
+  return items.every((i) =>
+    i.products && i.products.active && (i.products.infinite_stock || Number(i.products.stock_quantity) >= i.quantity)
+  )
 }
 
 /**

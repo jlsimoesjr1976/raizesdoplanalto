@@ -45,10 +45,10 @@ Deno.serve(async (req) => {
     const comboIds = [...new Set(items.filter((i) => i.combo_id).map((i) => i.combo_id!))]
     const [{ data: products }, { data: combos }] = await Promise.all([
       prodIds.length
-        ? admin.from('products').select('id, name, price, prep_station, stock_quantity, active').in('id', prodIds)
+        ? admin.from('products').select('id, name, price, prep_station, stock_quantity, infinite_stock, active').in('id', prodIds)
         : Promise.resolve({ data: [] }),
       comboIds.length
-        ? admin.from('combos').select('id, name, discount_percent, active, show_in_menu, combo_items(quantity, products(id, name, price, prep_station, stock_quantity, active))').in('id', comboIds)
+        ? admin.from('combos').select('id, name, discount_percent, active, show_in_menu, combo_items(quantity, products(id, name, price, prep_station, stock_quantity, infinite_stock, active))').in('id', comboIds)
         : Promise.resolve({ data: [] }),
     ])
     const byId = new Map((products ?? []).map((p) => [p.id, p]))
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     // é baixado por componente.
     const rows: { product_id: string; product_name: string; quantity: number; unit_price: number; notes: string | null; prep_station: string | null; kitchen_status: string }[] = []
     // Demanda total por produto (soma de linhas avulsas + componentes de combos) p/ validar estoque
-    const demand = new Map<string, { name: string; stock: number; qty: number }>()
+    const demand = new Map<string, { name: string; stock: number; qty: number; infinite: boolean }>()
 
     for (const line of items) {
       const qty = Math.floor(Number(line.quantity))
@@ -68,14 +68,14 @@ Deno.serve(async (req) => {
       if (line.combo_id) {
         const c = comboById.get(line.combo_id)
         if (!c || !c.active || !c.show_in_menu) return json({ error: 'Combo indisponível no carrinho.' }, 400)
-        const comboItems = (c.combo_items ?? []) as { quantity: number; products: { id: string; name: string; price: number; prep_station: string | null; stock_quantity: number; active: boolean } }[]
+        const comboItems = (c.combo_items ?? []) as { quantity: number; products: { id: string; name: string; price: number; prep_station: string | null; stock_quantity: number; infinite_stock: boolean; active: boolean } }[]
         if (comboItems.length === 0) return json({ error: `Combo ${c.name} sem produtos.` }, 400)
         const factor = 1 - Number(c.discount_percent) / 100
         for (const ci of comboItems) {
           const p = ci.products
           if (!p || !p.active) return json({ error: `Produto do combo ${c.name} indisponível.` }, 400)
           const compQty = ci.quantity * qty
-          const d = demand.get(p.id) ?? { name: p.name, stock: Number(p.stock_quantity), qty: 0 }
+          const d = demand.get(p.id) ?? { name: p.name, stock: Number(p.stock_quantity), qty: 0, infinite: p.infinite_stock }
           d.qty += compQty
           demand.set(p.id, d)
           rows.push({
@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
       } else {
         const p = byId.get(line.product_id!)
         if (!p || !p.active) return json({ error: `Produto indisponível no carrinho.` }, 400)
-        const d = demand.get(p.id) ?? { name: p.name, stock: Number(p.stock_quantity), qty: 0 }
+        const d = demand.get(p.id) ?? { name: p.name, stock: Number(p.stock_quantity), qty: 0, infinite: p.infinite_stock }
         d.qty += qty
         demand.set(p.id, d)
         rows.push({
@@ -101,9 +101,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Estoque suficiente para a demanda total de cada produto?
+    // Estoque suficiente para a demanda total de cada produto? (ignora quem tem estoque infinito)
     for (const d of demand.values()) {
-      if (d.stock < d.qty) return json({ error: `Estoque insuficiente para ${d.name}.` }, 409)
+      if (!d.infinite && d.stock < d.qty) return json({ error: `Estoque insuficiente para ${d.name}.` }, 409)
     }
 
     const total = rows.reduce((s, r) => s + r.unit_price * r.quantity, 0)

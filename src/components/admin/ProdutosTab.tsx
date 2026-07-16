@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, ClipboardList, UtensilsCrossed, Package, AlertTriangle, Copy, Camera, Loader2, FileSpreadsheet, LayoutGrid, List, Eye, EyeOff } from 'lucide-react'
+import { Plus, Pencil, Trash2, ClipboardList, UtensilsCrossed, Package, AlertTriangle, Copy, Camera, Loader2, FileSpreadsheet, LayoutGrid, List, Eye, EyeOff, Infinity } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ImportXlsxModal } from './ImportXlsxModal'
 import { produtosImportConfig } from '@/lib/importConfigs'
@@ -81,6 +81,23 @@ function MenuVisibilityButton({ visible, onToggle }: { visible: boolean; onToggl
     >
       {visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
       {visible ? 'No cardápio' : 'Oculto'}
+    </button>
+  )
+}
+
+function InfiniteStockButton({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      title={active ? 'Estoque infinito ativo (clique para voltar a controlar estoque)' : 'Marcar como estoque infinito (não baixa nem bloqueia por falta de estoque)'}
+      onClick={(e) => { e.stopPropagation(); onToggle() }}
+      className={cn(
+        'inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full transition-colors',
+        active ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+      )}
+    >
+      <Infinity className="w-3 h-3" />
+      {active ? 'Estoque infinito' : 'Estoque normal'}
     </button>
   )
 }
@@ -155,13 +172,14 @@ interface ProductCardProps {
   onDelete: () => void
   onCyclePrep: () => void
   onToggleMenu: () => void
+  onToggleInfinite: () => void
   onUpdateField: (patch: Partial<Pick<Product, 'price' | 'cost_price' | 'stock_quantity'>>) => void
   duplicating: boolean
   deleting: boolean
   onImageUpdated: () => void
 }
 
-function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, onToggleMenu, onUpdateField, duplicating, deleting, onImageUpdated }: ProductCardProps) {
+function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, onToggleMenu, onToggleInfinite, onUpdateField, duplicating, deleting, onImageUpdated }: ProductCardProps) {
   const [uploading, setUploading] = useState(false)
   const [localImage, setLocalImage] = useState<string | null>(p.image_url ?? null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -228,6 +246,7 @@ function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onD
             </Badge>
             <PrepStationButton station={p.prep_station} onCycle={onCyclePrep} />
             <MenuVisibilityButton visible={p.show_in_menu} onToggle={onToggleMenu} />
+            <InfiniteStockButton active={p.infinite_stock} onToggle={onToggleInfinite} />
           </div>
         </div>
 
@@ -256,24 +275,31 @@ function ProductCard({ product: p, categories, onEdit, onFicha, onDuplicate, onD
             />
           </div>
           <div className={`rounded-md border px-1 py-1 ${
-            p.stock_quantity <= 0 ? 'bg-red-50 border-red-200'
+            p.infinite_stock ? 'bg-blue-50 border-blue-200'
+            : p.stock_quantity <= 0 ? 'bg-red-50 border-red-200'
             : p.stock_quantity <= 5 ? 'bg-amber-50 border-amber-200'
             : 'bg-muted/30'
           }`}>
             <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Estoque</p>
-            <InlineNumber
-              value={p.stock_quantity}
-              title="Quantidade em estoque"
-              onSave={(v) => onUpdateField({ stock_quantity: v })}
-              render={(v) => (
-                <span className={`inline-flex items-center gap-1 text-sm font-medium ${
-                  v <= 0 ? 'text-red-700' : v <= 5 ? 'text-amber-700' : ''
-                }`}>
-                  {v <= 0 ? <AlertTriangle className="w-3 h-3" /> : <Package className="w-3 h-3" />}
-                  {v} un
-                </span>
-              )}
-            />
+            {p.infinite_stock ? (
+              <span className="inline-flex items-center gap-1 text-sm font-medium text-blue-700" title="Estoque infinito">
+                <Infinity className="w-3.5 h-3.5" /> Infinito
+              </span>
+            ) : (
+              <InlineNumber
+                value={p.stock_quantity}
+                title="Quantidade em estoque"
+                onSave={(v) => onUpdateField({ stock_quantity: v })}
+                render={(v) => (
+                  <span className={`inline-flex items-center gap-1 text-sm font-medium ${
+                    v <= 0 ? 'text-red-700' : v <= 5 ? 'text-amber-700' : ''
+                  }`}>
+                    {v <= 0 ? <AlertTriangle className="w-3 h-3" /> : <Package className="w-3 h-3" />}
+                    {v} un
+                  </span>
+                )}
+              />
+            )}
           </div>
         </div>
 
@@ -306,12 +332,13 @@ interface ProductRowProps {
   onDelete: () => void
   onCyclePrep: () => void
   onToggleMenu: () => void
+  onToggleInfinite: () => void
   onUpdateField: (patch: Partial<Pick<Product, 'price' | 'cost_price' | 'stock_quantity'>>) => void
   duplicating: boolean
   deleting: boolean
 }
 
-function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, onToggleMenu, onUpdateField, duplicating, deleting }: ProductRowProps) {
+function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDelete, onCyclePrep, onToggleMenu, onToggleInfinite, onUpdateField, duplicating, deleting }: ProductRowProps) {
   return (
     <div className="flex items-center gap-3 p-2.5 rounded-lg border bg-card hover:shadow-sm transition-shadow">
       <div className="w-11 h-11 rounded-md bg-muted overflow-hidden shrink-0 flex items-center justify-center">
@@ -330,6 +357,7 @@ function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDe
           {!p.active && <Badge variant="secondary" className="text-[10px]">Inativo</Badge>}
           <PrepStationButton station={p.prep_station} onCycle={onCyclePrep} />
           <MenuVisibilityButton visible={p.show_in_menu} onToggle={onToggleMenu} />
+          <InfiniteStockButton active={p.infinite_stock} onToggle={onToggleInfinite} />
         </div>
         {/* Mobile: venda + estoque compactos */}
         <div className="flex sm:hidden items-center gap-3 mt-0.5">
@@ -339,18 +367,22 @@ function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDe
             onSave={(v) => onUpdateField({ price: v })}
             render={(v) => <span className="text-xs font-bold text-green-600 tabular-nums">{formatCurrency(v)}</span>}
           />
-          <InlineNumber
-            value={p.stock_quantity}
-            title="Quantidade em estoque"
-            onSave={(v) => onUpdateField({ stock_quantity: v })}
-            render={(v) => (
-              <span className={cn('inline-flex items-center gap-1 text-xs',
-                v <= 0 ? 'text-red-600' : v <= 5 ? 'text-amber-600' : 'text-muted-foreground')}>
-                {v <= 0 ? <AlertTriangle className="w-3 h-3" /> : <Package className="w-3 h-3" />}
-                {v} un
-              </span>
-            )}
-          />
+          {p.infinite_stock ? (
+            <span className="inline-flex items-center gap-1 text-xs text-blue-700"><Infinity className="w-3 h-3" /> Infinito</span>
+          ) : (
+            <InlineNumber
+              value={p.stock_quantity}
+              title="Quantidade em estoque"
+              onSave={(v) => onUpdateField({ stock_quantity: v })}
+              render={(v) => (
+                <span className={cn('inline-flex items-center gap-1 text-xs',
+                  v <= 0 ? 'text-red-600' : v <= 5 ? 'text-amber-600' : 'text-muted-foreground')}>
+                  {v <= 0 ? <AlertTriangle className="w-3 h-3" /> : <Package className="w-3 h-3" />}
+                  {v} un
+                </span>
+              )}
+            />
+          )}
         </div>
       </div>
       {/* Venda / Custo / Estoque — editáveis inline */}
@@ -374,20 +406,24 @@ function ProductRow({ product: p, categories, onEdit, onFicha, onDuplicate, onDe
           />
         </div>
         <div className={cn('rounded-md border px-1 py-0.5',
-          p.stock_quantity <= 0 ? 'bg-red-50 border-red-200' : p.stock_quantity <= 5 ? 'bg-amber-50 border-amber-200' : 'bg-muted/30')}>
+          p.infinite_stock ? 'bg-blue-50 border-blue-200' : p.stock_quantity <= 0 ? 'bg-red-50 border-red-200' : p.stock_quantity <= 5 ? 'bg-amber-50 border-amber-200' : 'bg-muted/30')}>
           <p className="text-[9px] text-muted-foreground leading-none">Estoque</p>
-          <InlineNumber
-            value={p.stock_quantity}
-            title="Quantidade em estoque"
-            onSave={(v) => onUpdateField({ stock_quantity: v })}
-            render={(v) => (
-              <span className={cn('inline-flex items-center gap-1 text-xs font-medium tabular-nums',
-                v <= 0 ? 'text-red-700' : v <= 5 ? 'text-amber-700' : '')}>
-                {v <= 0 ? <AlertTriangle className="w-3 h-3" /> : <Package className="w-3 h-3" />}
-                {v} un
-              </span>
-            )}
-          />
+          {p.infinite_stock ? (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700"><Infinity className="w-3 h-3" /> Infinito</span>
+          ) : (
+            <InlineNumber
+              value={p.stock_quantity}
+              title="Quantidade em estoque"
+              onSave={(v) => onUpdateField({ stock_quantity: v })}
+              render={(v) => (
+                <span className={cn('inline-flex items-center gap-1 text-xs font-medium tabular-nums',
+                  v <= 0 ? 'text-red-700' : v <= 5 ? 'text-amber-700' : '')}>
+                  {v <= 0 ? <AlertTriangle className="w-3 h-3" /> : <Package className="w-3 h-3" />}
+                  {v} un
+                </span>
+              )}
+            />
+          )}
         </div>
       </div>
       <div className="flex gap-1.5 shrink-0">
@@ -494,6 +530,24 @@ export function ProdutosTab() {
       const prev = queryClient.getQueryData<ProductWithCategory[]>(['products'])
       queryClient.setQueryData<ProductWithCategory[]>(['products'], (old) =>
         (old ?? []).map((p) => (p.id === id ? { ...p, show_in_menu: show } : p)))
+      return { prev }
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['products'], ctx.prev)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
+  })
+
+  const infiniteMutation = useMutation({
+    mutationFn: async ({ id, infinite }: { id: string; infinite: boolean }) => {
+      const { error } = await supabase.from('products').update({ infinite_stock: infinite }).eq('id', id)
+      if (error) throw error
+    },
+    onMutate: async ({ id, infinite }) => {
+      await queryClient.cancelQueries({ queryKey: ['products'] })
+      const prev = queryClient.getQueryData<ProductWithCategory[]>(['products'])
+      queryClient.setQueryData<ProductWithCategory[]>(['products'], (old) =>
+        (old ?? []).map((p) => (p.id === id ? { ...p, infinite_stock: infinite } : p)))
       return { prev }
     },
     onError: (_e, _v, ctx) => {
@@ -672,6 +726,7 @@ export function ProdutosTab() {
               onDelete={() => handleDelete(p)}
               onCyclePrep={() => prepMutation.mutate({ id: p.id, station: nextPrepStation(p.prep_station) })}
               onToggleMenu={() => menuMutation.mutate({ id: p.id, show: !p.show_in_menu })}
+              onToggleInfinite={() => infiniteMutation.mutate({ id: p.id, infinite: !p.infinite_stock })}
               onUpdateField={(patch) => fieldMutation.mutate({ id: p.id, patch })}
               duplicating={duplicateMutation.isPending}
               deleting={deleteMutation.isPending}
@@ -695,6 +750,7 @@ export function ProdutosTab() {
               onDelete={() => handleDelete(p)}
               onCyclePrep={() => prepMutation.mutate({ id: p.id, station: nextPrepStation(p.prep_station) })}
               onToggleMenu={() => menuMutation.mutate({ id: p.id, show: !p.show_in_menu })}
+              onToggleInfinite={() => infiniteMutation.mutate({ id: p.id, infinite: !p.infinite_stock })}
               onUpdateField={(patch) => fieldMutation.mutate({ id: p.id, patch })}
               duplicating={duplicateMutation.isPending}
               deleting={deleteMutation.isPending}
