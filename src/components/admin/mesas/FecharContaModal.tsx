@@ -168,6 +168,9 @@ export function FecharContaModal({ open, onClose, onClosed, order }: Props) {
       status: 'paid',
       closed_at: new Date().toISOString(),
       mp_payment_ids: mpPaymentIds,
+      service_charge_included: includeService,
+      service_charge_percent: includeService ? servicePercent : null,
+      service_charge_amount: Math.round(serviceCharge * 100) / 100,
     }).eq('id', order.id)
 
     if (order.table_id) {

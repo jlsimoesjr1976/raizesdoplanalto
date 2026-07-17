@@ -133,6 +133,9 @@ export interface Order {
   delivery_address: string | null
   delivery_reference: string | null
   delivery_status: 'recebido' | 'preparando' | 'saiu_entrega' | 'entregue'
+  service_charge_included: boolean
+  service_charge_percent: number | null
+  service_charge_amount: number
   created_at: string
   closed_at: string | null
   tables?: Table
