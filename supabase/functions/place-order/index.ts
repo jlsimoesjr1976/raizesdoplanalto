@@ -31,8 +31,16 @@ Deno.serve(async (req) => {
     const { data: sess } = await admin.from('customer_sessions').select('customer_id, expires_at').eq('token', token).maybeSingle()
     if (!sess || new Date(sess.expires_at).getTime() < Date.now()) return json({ error: 'Sessão expirada. Faça login novamente.' }, 401)
 
-    const { data: customer } = await admin.from('customers').select('id, name, phone, address, address_reference').eq('id', sess.customer_id).single()
+    const { data: customer } = await admin.from('customers')
+      .select('id, name, phone, address, address_reference, delivery_zone_id, delivery_zones(name, fee, active)')
+      .eq('id', sess.customer_id).single()
     if (!customer) return json({ error: 'Cliente não encontrado.' }, 404)
+
+    const zone = Array.isArray(customer.delivery_zones) ? customer.delivery_zones[0] : customer.delivery_zones
+    if (!customer.delivery_zone_id || !zone || !zone.active) {
+      return json({ error: 'Ainda estamos confirmando a taxa de entrega para o seu bairro. Atualize seu endereço ou entre em contato pelo WhatsApp para finalizar o pedido.' }, 409)
+    }
+    const deliveryFee = Number(zone.fee)
 
     // Anti-spam: no máximo 5 pedidos a cada 10 minutos por cliente
     const { data: rlOk } = await admin.rpc('check_rate_limit', {
@@ -106,7 +114,8 @@ Deno.serve(async (req) => {
       if (!d.infinite && d.stock < d.qty) return json({ error: `Estoque insuficiente para ${d.name}.` }, 409)
     }
 
-    const total = rows.reduce((s, r) => s + r.unit_price * r.quantity, 0)
+    const subtotal = rows.reduce((s, r) => s + r.unit_price * r.quantity, 0)
+    const total = Math.round((subtotal + deliveryFee) * 100) / 100
 
     // Cria o pedido
     const { data: order, error: oErr } = await admin.from('orders').insert({
@@ -118,6 +127,8 @@ Deno.serve(async (req) => {
       delivery_address: customer.address ?? null,
       delivery_reference: customer.address_reference ?? null,
       delivery_status: 'recebido',
+      delivery_fee: deliveryFee,
+      delivery_zone_name: zone.name,
       people_count: 1,
       total,
       notes: notes?.trim() || null,

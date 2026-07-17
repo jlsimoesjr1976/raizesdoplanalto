@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react'
-import { customerLogin, customerSignup, customerMe, customerLogout, type CustomerAccount } from '@/lib/customerApi'
+import { customerLogin, customerSignup, customerMe, customerLogout, customerUpdateAddress, type CustomerAccount, type AddressInput } from '@/lib/customerApi'
 
 const TOKEN_KEY = 'raizes_customer_token'
 
@@ -8,7 +8,8 @@ interface CustomerCtx {
   token: string | null
   loading: boolean
   login: (email: string, password: string) => Promise<string | null>
-  signup: (input: { name: string; email: string; phone?: string; address: string; address_reference?: string; password: string }) => Promise<string | null>
+  signup: (input: { name: string; email: string; phone?: string; password: string } & AddressInput) => Promise<string | null>
+  updateAddress: (input: AddressInput) => Promise<string | null>
   logout: () => void
 }
 
@@ -47,6 +48,14 @@ export function CustomerProvider({ children }: { children: ReactNode }) {
     return null
   }
 
+  const updateAddress: CustomerCtx['updateAddress'] = async (input) => {
+    if (!token) return 'Sessão expirada. Faça login novamente.'
+    const res = await customerUpdateAddress(token, input)
+    if (res.error || !res.customer) return res.error ?? 'Falha ao atualizar o endereço.'
+    setCustomer(res.customer)
+    return null
+  }
+
   const logout = useCallback(() => {
     const t = localStorage.getItem(TOKEN_KEY)
     if (t) customerLogout(t)
@@ -55,7 +64,7 @@ export function CustomerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <Ctx.Provider value={{ customer, token, loading, login, signup, logout }}>
+    <Ctx.Provider value={{ customer, token, loading, login, signup, updateAddress, logout }}>
       {children}
     </Ctx.Provider>
   )

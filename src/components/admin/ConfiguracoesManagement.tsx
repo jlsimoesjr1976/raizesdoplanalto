@@ -16,6 +16,8 @@ import { supabase } from '@/integrations/supabase/client'
 import { testConnection, listDevices, type PointDevice } from '@/lib/mercadopago'
 import { testEvolutionConnection } from '@/lib/evolution'
 import { fetchCnpj, applyCnpjMask, onlyDigits } from '@/lib/cnpj'
+import { EntregaManagement } from './entrega/EntregaManagement'
+import { Truck } from 'lucide-react'
 
 interface Settings {
   restaurant_name: string
@@ -272,6 +274,7 @@ export function ConfiguracoesManagement() {
             <TabsTrigger value="whatsapp" className="gap-1.5"><MessageSquare className="w-4 h-4" />WhatsApp</TabsTrigger>
             <TabsTrigger value="mercadopago" className="gap-1.5"><CreditCard className="w-4 h-4" />Mercado Pago</TabsTrigger>
             <TabsTrigger value="focusnfe" className="gap-1.5"><FileText className="w-4 h-4" />Focus NFe</TabsTrigger>
+            <TabsTrigger value="entrega" className="gap-1.5"><Truck className="w-4 h-4" />Entrega</TabsTrigger>
           </TabsList>
 
           {/* ── FISCAL ── */}
@@ -673,6 +676,19 @@ export function ConfiguracoesManagement() {
                 <p className="text-xs text-muted-foreground">
                   Os tokens são obtidos no painel da Focus NFe. Cada ambiente possui um token próprio.
                 </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── ENTREGA ── */}
+          <TabsContent value="entrega" className="mt-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Zonas de Entrega</CardTitle>
+                <CardDescription>Taxa fixa por bairro para pedidos do cardápio online.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <EntregaManagement />
               </CardContent>
             </Card>
           </TabsContent>

@@ -136,6 +136,8 @@ export interface Order {
   service_charge_included: boolean
   service_charge_percent: number | null
   service_charge_amount: number
+  delivery_fee: number
+  delivery_zone_name: string | null
   created_at: string
   closed_at: string | null
   tables?: Table
@@ -165,7 +167,35 @@ export interface Customer {
   email: string | null
   birthday: string | null
   notes: string | null
+  address: string | null
+  address_reference: string | null
+  cep: string | null
+  street: string | null
+  number: string | null
+  complement: string | null
+  neighborhood: string | null
+  city: string | null
+  state: string | null
+  delivery_zone_id: string | null
   created_at: string
+}
+
+export interface DeliveryZone {
+  id: string
+  name: string
+  fee: number
+  active: boolean
+  sort_order: number
+  created_at: string
+}
+
+export interface DeliveryNeighborhood {
+  id: string
+  neighborhood: string
+  city: string | null
+  zone_id: string | null
+  created_at: string
+  delivery_zones?: DeliveryZone
 }
 
 export interface Freelancer {

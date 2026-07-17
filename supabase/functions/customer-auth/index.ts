@@ -1,5 +1,7 @@
 // Autenticação de clientes (cardápio online) — separada do login de staff.
-// Ações: signup, login, me. Senha via PBKDF2 (Web Crypto). Sessão = token opaco.
+// Ações: signup, login, me, update_address, logout. Senha via PBKDF2 (Web Crypto).
+// Sessão = token opaco. Endereço é estruturado (CEP + partes via ViaCEP no
+// front) para que o bairro resolvido classifique a zona de entrega/taxa.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -43,6 +45,10 @@ function newToken(): string {
 function onlyDigits(s: string | null | undefined): string {
   return (s ?? '').replace(/\D/g, '')
 }
+/** Normaliza nome de bairro p/ casar cadastros diferentes do mesmo bairro (maiúsculas, sem acento, sem espaços duplicados) */
+function normalizeNeighborhood(s: string): string {
+  return s.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').toUpperCase()
+}
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
@@ -53,11 +59,27 @@ async function createSession(customerId: string): Promise<string> {
   return token
 }
 
-function publicCustomer(c: { id: string; name: string; email: string | null; phone: string | null; address?: string | null; address_reference?: string | null }) {
-  return { id: c.id, name: c.name, email: c.email, phone: c.phone, address: c.address ?? null, address_reference: c.address_reference ?? null }
+interface CustRow {
+  id: string; name: string; email: string | null; phone: string | null
+  address: string | null; address_reference: string | null
+  cep: string | null; street: string | null; number: string | null; complement: string | null
+  neighborhood: string | null; city: string | null; state: string | null
+  delivery_zone_id: string | null
+  delivery_zones?: { name: string; fee: number } | { name: string; fee: number }[] | null
 }
 
-const CUST_COLS = 'id, name, email, phone, address, address_reference'
+function publicCustomer(c: CustRow) {
+  const zone = Array.isArray(c.delivery_zones) ? c.delivery_zones[0] : c.delivery_zones
+  return {
+    id: c.id, name: c.name, email: c.email, phone: c.phone,
+    address: c.address ?? null, address_reference: c.address_reference ?? null,
+    cep: c.cep ?? null, street: c.street ?? null, number: c.number ?? null, complement: c.complement ?? null,
+    neighborhood: c.neighborhood ?? null, city: c.city ?? null, state: c.state ?? null,
+    delivery_zone: c.delivery_zone_id && zone ? { id: c.delivery_zone_id, name: zone.name, fee: Number(zone.fee) } : null,
+  }
+}
+
+const CUST_COLS = 'id, name, email, phone, address, address_reference, cep, street, number, complement, neighborhood, city, state, delivery_zone_id, delivery_zones(name, fee)'
 
 function clientIp(req: Request): string {
   return (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'unknown'
@@ -70,6 +92,33 @@ async function rateLimit(bucket: string, key: string, max: number, windowSecs: n
   })
   if (error) return true // não bloqueia clientes por falha interna do limitador
   return data === true
+}
+
+/** Garante o bairro na fila de classificação e devolve o zone_id já resolvido (ou null se ainda não classificado). */
+async function resolveDeliveryZone(neighborhoodRaw: string, city: string): Promise<string | null> {
+  const neighborhood = normalizeNeighborhood(neighborhoodRaw)
+  if (!neighborhood) return null
+  const { data: existing } = await admin.from('delivery_neighborhoods').select('zone_id').eq('neighborhood', neighborhood).maybeSingle()
+  if (existing) return existing.zone_id
+  const { data: created } = await admin.from('delivery_neighborhoods')
+    .insert({ neighborhood, city: city.trim() || null })
+    .select('zone_id').single()
+  return created?.zone_id ?? null
+}
+
+interface AddressInput {
+  cep?: string; street?: string; number?: string; complement?: string
+  neighborhood?: string; city?: string; state?: string; address_reference?: string
+}
+
+function composeAddress(a: AddressInput): string {
+  const parts = [
+    a.number ? `${a.street ?? ''}, ${a.number}` : (a.street ?? ''),
+    a.complement?.trim(),
+    a.neighborhood,
+    a.city && a.state ? `${a.city}/${a.state}` : a.city,
+  ].filter((p) => p && p.trim())
+  return parts.join(' - ')
 }
 
 Deno.serve(async (req) => {
@@ -86,24 +135,42 @@ Deno.serve(async (req) => {
       const name = (payload.name ?? '').trim()
       const email = (payload.email ?? '').trim().toLowerCase()
       const phone = onlyDigits(payload.phone)
-      const address = (payload.address ?? '').trim()
-      const address_reference = (payload.address_reference ?? '').trim()
       const password = payload.password ?? ''
+      const street = (payload.street ?? '').trim()
+      const number = (payload.number ?? '').trim()
+      const neighborhood = (payload.neighborhood ?? '').trim()
+      const city = (payload.city ?? '').trim()
+      const state = (payload.state ?? 'DF').trim().toUpperCase()
+      const complement = (payload.complement ?? '').trim()
+      const cep = onlyDigits(payload.cep)
+      const address_reference = (payload.address_reference ?? '').trim()
+
       if (!name) return json({ error: 'Informe seu nome.' }, 400)
       if (!email || !email.includes('@')) return json({ error: 'Informe um e-mail válido.' }, 400)
       if (password.length < 6) return json({ error: 'A senha deve ter ao menos 6 caracteres.' }, 400)
+      if (!street || !number || !neighborhood || !city) {
+        return json({ error: 'Informe o CEP e complete o endereço (rua, número e bairro).' }, 400)
+      }
 
       const { data: existing } = await admin.from('customers').select('id').ilike('email', email).not('password_hash', 'is', null).maybeSingle()
       if (existing) return json({ error: 'Já existe uma conta com este e-mail.' }, 409)
 
+      const delivery_zone_id = await resolveDeliveryZone(neighborhood, city)
+      const address = composeAddress({ street, number, complement, neighborhood, city, state })
       const password_hash = await hashPassword(password)
+
       const { data: created, error } = await admin.from('customers')
-        .insert({ name, email, phone: phone || null, address, address_reference: address_reference || null, password_hash })
+        .insert({
+          name, email, phone: phone || null, password_hash,
+          address, address_reference: address_reference || null,
+          cep: cep || null, street, number, complement: complement || null,
+          neighborhood, city, state, delivery_zone_id,
+        })
         .select(CUST_COLS).single()
       if (error) return json({ error: error.message }, 400)
 
       const token = await createSession(created.id)
-      return json({ token, customer: publicCustomer(created) })
+      return json({ token, customer: publicCustomer(created as CustRow) })
     }
 
     if (action === 'login') {
@@ -126,7 +193,7 @@ Deno.serve(async (req) => {
       if (!ok) return json({ error: 'E-mail ou senha inválidos.' }, 401)
 
       const token = await createSession(cust.id)
-      return json({ token, customer: publicCustomer(cust) })
+      return json({ token, customer: publicCustomer(cust as CustRow) })
     }
 
     if (action === 'me') {
@@ -134,6 +201,38 @@ Deno.serve(async (req) => {
       const cust = await customerFromToken(token)
       if (!cust) return json({ error: 'Sessão inválida.' }, 401)
       return json({ customer: publicCustomer(cust) })
+    }
+
+    if (action === 'update_address') {
+      const token = payload.token ?? ''
+      const cust = await customerFromToken(token)
+      if (!cust) return json({ error: 'Sessão inválida. Faça login novamente.' }, 401)
+
+      const street = (payload.street ?? '').trim()
+      const number = (payload.number ?? '').trim()
+      const neighborhood = (payload.neighborhood ?? '').trim()
+      const city = (payload.city ?? '').trim()
+      const state = (payload.state ?? 'DF').trim().toUpperCase()
+      const complement = (payload.complement ?? '').trim()
+      const cep = onlyDigits(payload.cep)
+      const address_reference = (payload.address_reference ?? '').trim()
+      if (!street || !number || !neighborhood || !city) {
+        return json({ error: 'Informe o CEP e complete o endereço (rua, número e bairro).' }, 400)
+      }
+
+      const delivery_zone_id = await resolveDeliveryZone(neighborhood, city)
+      const address = composeAddress({ street, number, complement, neighborhood, city, state })
+
+      const { data: updated, error } = await admin.from('customers')
+        .update({
+          address, address_reference: address_reference || null,
+          cep: cep || null, street, number, complement: complement || null,
+          neighborhood, city, state, delivery_zone_id,
+        })
+        .eq('id', cust.id)
+        .select(CUST_COLS).single()
+      if (error) return json({ error: error.message }, 400)
+      return json({ customer: publicCustomer(updated as CustRow) })
     }
 
     if (action === 'logout') {
@@ -148,7 +247,7 @@ Deno.serve(async (req) => {
   }
 })
 
-async function customerFromToken(token: string) {
+async function customerFromToken(token: string): Promise<CustRow | null> {
   if (!token) return null
   const { data: sess } = await admin.from('customer_sessions').select('customer_id, expires_at').eq('token', token).maybeSingle()
   if (!sess) return null
@@ -157,5 +256,5 @@ async function customerFromToken(token: string) {
     return null
   }
   const { data: cust } = await admin.from('customers').select(CUST_COLS).eq('id', sess.customer_id).single()
-  return cust
+  return cust as CustRow | null
 }

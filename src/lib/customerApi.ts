@@ -7,6 +7,25 @@ export interface CustomerAccount {
   phone: string | null
   address: string | null
   address_reference: string | null
+  cep: string | null
+  street: string | null
+  number: string | null
+  complement: string | null
+  neighborhood: string | null
+  city: string | null
+  state: string | null
+  delivery_zone: { id: string; name: string; fee: number } | null
+}
+
+export interface AddressInput {
+  cep: string
+  street: string
+  number: string
+  complement?: string
+  neighborhood: string
+  city: string
+  state: string
+  address_reference?: string
 }
 
 export interface CartLine {
@@ -33,7 +52,7 @@ async function callAuth(body: Record<string, unknown>): Promise<AuthResult> {
   return data as AuthResult
 }
 
-export function customerSignup(input: { name: string; email: string; phone?: string; address: string; address_reference?: string; password: string }) {
+export function customerSignup(input: { name: string; email: string; phone?: string; password: string } & AddressInput) {
   return callAuth({ action: 'signup', ...input })
 }
 export function customerLogin(input: { email: string; password: string }) {
@@ -42,6 +61,9 @@ export function customerLogin(input: { email: string; password: string }) {
 export async function customerMe(token: string): Promise<CustomerAccount | null> {
   const { data } = await supabase.functions.invoke('customer-auth', { body: { action: 'me', token } })
   return (data as { customer?: CustomerAccount })?.customer ?? null
+}
+export async function customerUpdateAddress(token: string, input: AddressInput): Promise<AuthResult> {
+  return callAuth({ action: 'update_address', token, ...input })
 }
 export async function customerLogout(token: string) {
   await supabase.functions.invoke('customer-auth', { body: { action: 'logout', token } })

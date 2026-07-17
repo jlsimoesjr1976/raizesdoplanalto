@@ -167,6 +167,13 @@ export function PedidosManagement() {
 
                   {p.notes && <p className="text-xs text-muted-foreground italic border-t border-black/5 pt-2">Obs.: {p.notes}</p>}
 
+                  {Number(p.delivery_fee) > 0 && (
+                    <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-black/5 pt-2">
+                      <span>Taxa de entrega{p.delivery_zone_name ? ` (${p.delivery_zone_name})` : ''}</span>
+                      <span>{formatCurrency(Number(p.delivery_fee))}</span>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between border-t border-black/5 pt-2 mt-auto">
                     <span className="text-xs text-muted-foreground">{items.length} {items.length === 1 ? 'item' : 'itens'}</span>
                     <span className="text-base font-bold text-amber-700">{formatCurrency(Number(p.total))}</span>

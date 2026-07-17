@@ -11,10 +11,12 @@ import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ShoppingCart, Plus, Minus, Search, UtensilsCrossed, LogOut, User, CheckCircle2, Loader2, Trash2, Eye, EyeOff, Package2 } from 'lucide-react'
+import { ShoppingCart, Plus, Minus, Search, UtensilsCrossed, LogOut, User, CheckCircle2, Loader2, Trash2, Eye, EyeOff, Package2, MapPin, PencilLine } from 'lucide-react'
 import logoImg from '@/assets/logo.png'
 import type { Product, Category } from '@/types/database'
 import { comboAvailable, comboFinal, comboTotal, comboMaxQty, type ComboWithItems } from '@/lib/combos'
+import { lookupCep, formatCep } from '@/lib/cep'
+import type { AddressInput } from '@/lib/customerApi'
 
 interface CartItem {
   product: Product
@@ -31,6 +33,7 @@ function CardapioInner() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [cartOpen, setCartOpen] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
+  const [enderecoOpen, setEnderecoOpen] = useState(false)
   const [placing, setPlacing] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
   const [orderNotes, setOrderNotes] = useState('')
@@ -155,6 +158,7 @@ function CardapioInner() {
           {customer ? (
             <div className="flex items-center gap-2">
               <span className="hidden sm:flex items-center gap-1 text-sm"><User className="w-4 h-4" />{customer.name.split(' ')[0]}</span>
+              <button onClick={() => setEnderecoOpen(true)} title="Meu endereço" className="p-1.5 rounded hover:bg-white/10"><MapPin className="w-4 h-4" /></button>
               <button onClick={logout} title="Sair" className="p-1.5 rounded hover:bg-white/10"><LogOut className="w-4 h-4" /></button>
             </div>
           ) : (
@@ -327,8 +331,30 @@ function CardapioInner() {
           </div>
           {cart.length > 0 && (
             <div className="border-t p-4 space-y-3">
-              <div className="flex justify-between font-semibold"><span>Total</span><span>{formatCurrency(cartTotal)}</span></div>
-              <Button className="w-full h-11" onClick={handleFinalizar} disabled={placing}>
+              {customer && !customer.delivery_zone && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-800 flex items-start gap-2">
+                  <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span className="flex-1">
+                    Ainda estamos confirmando a taxa de entrega para o seu bairro ({customer.neighborhood}).
+                    Você pode revisar o endereço ou aguardar a confirmação.
+                  </span>
+                  <button onClick={() => setEnderecoOpen(true)} className="underline shrink-0 flex items-center gap-0.5"><PencilLine className="w-3 h-3" />editar</button>
+                </div>
+              )}
+              <div className="text-sm space-y-1">
+                <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>{formatCurrency(cartTotal)}</span></div>
+                {customer?.delivery_zone && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Entrega ({customer.delivery_zone.name})</span>
+                    <span>{formatCurrency(customer.delivery_zone.fee)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-semibold text-base pt-1">
+                  <span>Total</span>
+                  <span>{formatCurrency(cartTotal + (customer?.delivery_zone?.fee ?? 0))}</span>
+                </div>
+              </div>
+              <Button className="w-full h-11" onClick={handleFinalizar} disabled={placing || !!(customer && !customer.delivery_zone)}>
                 {placing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Enviando...</> : (customer ? 'Finalizar pedido' : 'Entrar e finalizar')}
               </Button>
             </div>
@@ -337,6 +363,7 @@ function CardapioInner() {
       </Sheet>
 
       <AuthDialog open={authOpen} onClose={() => { pendingFinalize.current = false; setAuthOpen(false) }} onAuthed={() => setAuthOpen(false)} />
+      <EnderecoDialog open={enderecoOpen} onClose={() => setEnderecoOpen(false)} />
 
       {/* Sucesso */}
       <Dialog open={!!success} onOpenChange={(v) => !v && setSuccess(null)}>
@@ -361,25 +388,101 @@ function CatChip({ label, active, onClick }: { label: string; active: boolean; o
   )
 }
 
+const EMPTY_ADDRESS: AddressInput = { cep: '', street: '', number: '', complement: '', neighborhood: '', city: '', state: 'DF', address_reference: '' }
+
+/** CEP + campos de endereço; busca automática via ViaCEP ao completar o CEP */
+function AddressFields({ value, onChange }: { value: AddressInput; onChange: (patch: Partial<AddressInput>) => void }) {
+  const [cepBusy, setCepBusy] = useState(false)
+  const [cepError, setCepError] = useState('')
+  const [found, setFound] = useState(false)
+
+  async function handleCepBlur() {
+    const digits = value.cep.replace(/\D/g, '')
+    if (digits.length !== 8) return
+    setCepBusy(true); setCepError(''); setFound(false)
+    const res = await lookupCep(digits)
+    setCepBusy(false)
+    if (!res.ok) { setCepError(res.error); return }
+    onChange({ street: res.data.street, neighborhood: res.data.neighborhood, city: res.data.city, state: res.data.state })
+    setFound(true)
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label>CEP *</Label>
+        <div className="relative">
+          <Input
+            value={value.cep}
+            onChange={(e) => { onChange({ cep: formatCep(e.target.value) }); setFound(false) }}
+            onBlur={handleCepBlur}
+            placeholder="00000-000"
+            inputMode="numeric"
+            maxLength={9}
+          />
+          {cepBusy && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />}
+        </div>
+        {cepError && <p className="text-xs text-destructive">{cepError}</p>}
+        {found && !cepError && <p className="text-xs text-green-700 flex items-center gap-1"><MapPin className="w-3 h-3" /> {value.neighborhood} — {value.city}/{value.state}</p>}
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="col-span-2 space-y-1.5">
+          <Label>Rua *</Label>
+          <Input value={value.street} onChange={(e) => onChange({ street: e.target.value })} placeholder="Rua/Avenida" />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Número *</Label>
+          <Input value={value.number} onChange={(e) => onChange({ number: e.target.value })} placeholder="Nº" />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Complemento</Label>
+        <Input value={value.complement} onChange={(e) => onChange({ complement: e.target.value })} placeholder="Apto, bloco... (opcional)" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1.5">
+          <Label>Bairro *</Label>
+          <Input value={value.neighborhood} onChange={(e) => onChange({ neighborhood: e.target.value })} placeholder="Preenchido pelo CEP" />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Cidade *</Label>
+          <Input value={value.city} onChange={(e) => onChange({ city: e.target.value })} placeholder="Preenchido pelo CEP" />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Ponto de referência</Label>
+        <Input value={value.address_reference} onChange={(e) => onChange({ address_reference: e.target.value })} placeholder="Ex.: próximo à praça" />
+      </div>
+    </div>
+  )
+}
+
 function AuthDialog({ open, onClose, onAuthed }: { open: boolean; onClose: () => void; onAuthed: () => void }) {
   const { login, signup } = useCustomer()
   const [tab, setTab] = useState('login')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
-  const [address, setAddress] = useState('')
-  const [addressRef, setAddressRef] = useState('')
+  const [addr, setAddr] = useState<AddressInput>(EMPTY_ADDRESS)
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  function patchAddr(p: Partial<AddressInput>) { setAddr((a) => ({ ...a, ...p })) }
+
   async function submit() {
     setError(''); setBusy(true)
-    if (tab === 'signup' && !address.trim()) { setError('Informe o endereço de entrega.'); setBusy(false); return }
+    if (tab === 'signup' && (!addr.street.trim() || !addr.number.trim() || !addr.neighborhood.trim() || !addr.city.trim())) {
+      setError('Informe o CEP e complete o endereço de entrega.'); setBusy(false); return
+    }
     const err = tab === 'login'
       ? await login(email.trim(), password)
-      : await signup({ name: name.trim(), email: email.trim(), phone: phone.replace(/\D/g, '') || undefined, address: address.trim(), address_reference: addressRef.trim() || undefined, password })
+      : await signup({
+          name: name.trim(), email: email.trim(), phone: phone.replace(/\D/g, '') || undefined, password,
+          ...addr, street: addr.street.trim(), number: addr.number.trim(), neighborhood: addr.neighborhood.trim(), city: addr.city.trim(),
+          complement: addr.complement?.trim() || undefined, address_reference: addr.address_reference?.trim() || undefined,
+        })
     setBusy(false)
     if (err) { setError(err); return }
     onAuthed()
@@ -394,11 +497,10 @@ function AuthDialog({ open, onClose, onAuthed }: { open: boolean; onClose: () =>
             <TabsTrigger value="login">Entrar</TabsTrigger>
             <TabsTrigger value="signup">Criar conta</TabsTrigger>
           </TabsList>
-          <TabsContent value="signup" className="space-y-3 pt-3">
+          <TabsContent value="signup" className="space-y-3 pt-3 max-h-[50vh] overflow-y-auto pr-1">
             <div className="space-y-1.5"><Label>Nome *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" /></div>
             <div className="space-y-1.5"><Label>Telefone (WhatsApp)</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000" inputMode="tel" /></div>
-            <div className="space-y-1.5"><Label>Endereço de entrega *</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Rua, número, bairro" /></div>
-            <div className="space-y-1.5"><Label>Ponto de referência</Label><Input value={addressRef} onChange={(e) => setAddressRef(e.target.value)} placeholder="Ex.: próximo à praça" /></div>
+            <AddressFields value={addr} onChange={patchAddr} />
           </TabsContent>
           <div className="space-y-3 pt-3">
             <div className="space-y-1.5"><Label>E-mail *</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" /></div>
@@ -415,6 +517,55 @@ function AuthDialog({ open, onClose, onAuthed }: { open: boolean; onClose: () =>
             </Button>
           </div>
         </Tabs>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function EnderecoDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { customer, updateAddress } = useCustomer()
+  const [addr, setAddr] = useState<AddressInput>(EMPTY_ADDRESS)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (open && customer) {
+      setAddr({
+        cep: customer.cep ?? '', street: customer.street ?? '', number: customer.number ?? '',
+        complement: customer.complement ?? '', neighborhood: customer.neighborhood ?? '',
+        city: customer.city ?? '', state: customer.state ?? 'DF', address_reference: customer.address_reference ?? '',
+      })
+      setError('')
+    }
+  }, [open, customer])
+
+  function patchAddr(p: Partial<AddressInput>) { setAddr((a) => ({ ...a, ...p })) }
+
+  async function submit() {
+    if (!addr.street.trim() || !addr.number.trim() || !addr.neighborhood.trim() || !addr.city.trim()) {
+      setError('Informe o CEP e complete o endereço de entrega.'); return
+    }
+    setError(''); setBusy(true)
+    const err = await updateAddress({
+      ...addr, street: addr.street.trim(), number: addr.number.trim(), neighborhood: addr.neighborhood.trim(), city: addr.city.trim(),
+      complement: addr.complement?.trim() || undefined, address_reference: addr.address_reference?.trim() || undefined,
+    })
+    setBusy(false)
+    if (err) { setError(err); return }
+    onClose()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>Seu endereço de entrega</DialogTitle></DialogHeader>
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+          <AddressFields value={addr} onChange={patchAddr} />
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button className="w-full" onClick={submit} disabled={busy}>
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar endereço'}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   )
