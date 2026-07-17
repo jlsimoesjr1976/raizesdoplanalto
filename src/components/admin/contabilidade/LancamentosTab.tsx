@@ -36,6 +36,7 @@ export function LancamentosTab() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [modalOpen, setModalOpen] = useState(false)
   const [adjusting, setAdjusting] = useState<AccEntry | null>(null)
+  const [editing, setEditing] = useState<AccEntry | null>(null)
 
   const { from, to } = monthRange(year, month)
 
@@ -180,10 +181,17 @@ export function LancamentosTab() {
                   </Button>
                 </span>
               )}
-              {e.status === 'contabilizado' && e.origin !== 'estorno' && (
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive shrink-0" title="Estornar" onClick={(ev) => { ev.stopPropagation(); handleReverse(e) }}>
-                  <Undo2 className="w-3.5 h-3.5" />
-                </Button>
+              {e.status !== 'pendente' && e.status !== 'estornado' && (
+                <span className="flex gap-1 shrink-0" onClick={(ev) => ev.stopPropagation()}>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Editar lançamento" onClick={() => setEditing(e)}>
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                  {e.origin !== 'estorno' && (
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" title="Estornar" onClick={() => handleReverse(e)}>
+                      <Undo2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                </span>
               )}
             </div>
             {expanded.has(e.id) && (
@@ -218,6 +226,13 @@ export function LancamentosTab() {
         entry={adjusting}
         costCenters={costCenters}
         onClose={() => setAdjusting(null)}
+        onSaved={invalidate}
+      />
+
+      <EditarLancamentoModal
+        entry={editing}
+        costCenters={costCenters}
+        onClose={() => setEditing(null)}
         onSaved={invalidate}
       />
     </div>
@@ -323,6 +338,232 @@ function AjustarLancamentoModal({ entry, costCenters, onClose, onSaved }: {
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Salvar e contabilizar'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ── Editar lançamento (admin) — cabeçalho e partidas completas ─────────────
+
+interface EditLine { id?: string; account_id: string; side: AccNature; amount: string }
+
+function EditarLancamentoModal({ entry, costCenters, onClose, onSaved }: {
+  entry: AccEntry | null
+  costCenters: AccCostCenter[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [competence, setCompetence] = useState('')
+  const [cashDate, setCashDate] = useState('')
+  const [history, setHistory] = useState('')
+  const [document, setDocument] = useState('')
+  const [costCenter, setCostCenter] = useState('')
+  const [notes, setNotes] = useState('')
+  const [lines, setLines] = useState<EditLine[]>([])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['acc-accounts-analytic'],
+    enabled: !!entry,
+    queryFn: async () => {
+      const { data } = await supabase.from('acc_accounts').select('*').eq('allows_entries', true).eq('active', true)
+      return sortAccounts((data ?? []) as AccAccount[])
+    },
+  })
+
+  useEffect(() => {
+    if (entry) {
+      setCompetence(entry.competence_date)
+      setCashDate(entry.cash_date ?? '')
+      setHistory(entry.history)
+      setDocument(entry.document ?? '')
+      setCostCenter(entry.cost_center_id ?? '')
+      setNotes(entry.notes ?? '')
+      setLines((entry.acc_entry_lines ?? []).map((l) => ({ id: l.id, account_id: l.account_id, side: l.side, amount: String(l.amount) })))
+      setError('')
+    }
+  }, [entry])
+
+  const totals = useMemo(() => {
+    const d = lines.filter((l) => l.side === 'D').reduce((s, l) => s + (parseFloat(l.amount.replace(',', '.')) || 0), 0)
+    const c = lines.filter((l) => l.side === 'C').reduce((s, l) => s + (parseFloat(l.amount.replace(',', '.')) || 0), 0)
+    return { d, c, diff: Math.round((d - c) * 100) / 100 }
+  }, [lines])
+
+  function setLine(i: number, patch: Partial<EditLine>) {
+    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
+  }
+
+  async function handleSave() {
+    if (!entry) return
+    setError('')
+    if (!history.trim()) { setError('Informe o histórico do lançamento.'); return }
+    if (!competence) { setError('Informe a competência.'); return }
+    if (lines.some((l) => !l.account_id || !(parseFloat(l.amount.replace(',', '.')) > 0))) {
+      setError('Preencha conta e valor de todas as partidas.'); return
+    }
+    if (totals.diff !== 0 || totals.d === 0) { setError('Débitos e créditos precisam ser iguais e maiores que zero.'); return }
+
+    setSaving(true)
+    try {
+      const { error: hErr } = await supabase.from('acc_entries').update({
+        competence_date: competence,
+        cash_date: cashDate || null,
+        history: history.trim(),
+        document: document.trim() || null,
+        cost_center_id: costCenter || null,
+        notes: notes.trim() || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', entry.id)
+      if (hErr) throw hErr
+
+      const originalIds = new Set((entry.acc_entry_lines ?? []).map((l) => l.id))
+      const keptIds = new Set(lines.filter((l) => l.id).map((l) => l.id!))
+      const removedIds = [...originalIds].filter((id) => !keptIds.has(id))
+      if (removedIds.length) {
+        const { error: dErr } = await supabase.from('acc_entry_lines').delete().in('id', removedIds)
+        if (dErr) throw dErr
+      }
+
+      for (const l of lines) {
+        const amount = parseFloat(l.amount.replace(',', '.'))
+        if (l.id) {
+          const { error: uErr } = await supabase.from('acc_entry_lines')
+            .update({ account_id: l.account_id, side: l.side, amount, cost_center_id: costCenter || null })
+            .eq('id', l.id)
+          if (uErr) throw uErr
+        } else {
+          const { error: iErr } = await supabase.from('acc_entry_lines')
+            .insert({ entry_id: entry.id, account_id: l.account_id, side: l.side, amount, cost_center_id: costCenter || null })
+          if (iErr) throw iErr
+        }
+      }
+
+      await supabase.from('acc_logs').insert({
+        action: 'editar', entity: 'lancamento', entity_id: entry.id,
+        detail: { historico: history.trim() },
+      })
+
+      onSaved()
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!entry} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Editar Lançamento</DialogTitle>
+        </DialogHeader>
+
+        {entry && (
+          <div className="space-y-3">
+            {entry.origin !== 'manual' && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+                Este lançamento foi gerado automaticamente (origem: {ORIGIN_LABELS[entry.origin] ?? entry.origin}).
+                Editar aqui não altera o registro original que o gerou.
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Competência *</Label>
+                <Input type="date" value={competence} onChange={(e) => setCompetence(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Data de caixa</Label>
+                <Input type="date" value={cashDate} onChange={(e) => setCashDate(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Histórico *</Label>
+              <Input value={history} onChange={(e) => setHistory(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Documento</Label>
+                <Input value={document} onChange={(e) => setDocument(e.target.value)} placeholder="NF, recibo, boleto..." />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Centro de custo</Label>
+                <Select value={costCenter || '__none__'} onValueChange={(v) => setCostCenter(v === '__none__' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Nenhum</SelectItem>
+                    {costCenters.filter((c) => c.active).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Partidas *</Label>
+              <div className="space-y-2">
+                {lines.map((l, i) => (
+                  <div key={l.id ?? `new-${i}`} className="flex gap-2 items-center">
+                    <Select value={l.side} onValueChange={(v) => setLine(i, { side: v as AccNature })}>
+                      <SelectTrigger className="w-20 shrink-0"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="D">Débito</SelectItem>
+                        <SelectItem value="C">Crédito</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={l.account_id} onValueChange={(v) => setLine(i, { account_id: v })}>
+                      <SelectTrigger className="flex-1 min-w-0"><SelectValue placeholder="Selecionar conta..." /></SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      value={l.amount}
+                      onChange={(e) => setLine(i, { amount: e.target.value })}
+                      placeholder="0,00"
+                      inputMode="decimal"
+                      className="w-28 shrink-0 text-right"
+                    />
+                    <Button
+                      size="sm" variant="ghost" className="h-8 w-8 p-0 shrink-0 text-destructive"
+                      disabled={lines.length <= 2}
+                      onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setLines((prev) => [...prev, { account_id: '', side: 'D', amount: '' }])}>
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Adicionar partida
+              </Button>
+            </div>
+
+            <div className={cn('rounded-lg border p-3 text-sm flex gap-6 justify-end', totals.diff === 0 && totals.d > 0 ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200')}>
+              <span>Débitos: <span className="font-bold tabular-nums">{formatCurrency(totals.d)}</span></span>
+              <span>Créditos: <span className="font-bold tabular-nums">{formatCurrency(totals.c)}</span></span>
+              <span>Diferença: <span className={cn('font-bold tabular-nums', totals.diff !== 0 && 'text-destructive')}>{formatCurrency(Math.abs(totals.diff))}</span></span>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Observações</Label>
+              <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </div>
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSave} disabled={saving || totals.diff !== 0 || totals.d === 0}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar alterações'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
